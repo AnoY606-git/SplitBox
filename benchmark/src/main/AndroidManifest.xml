@@ -1,0 +1,12 @@
+<!-- Copyright (C) 2026 AnoY606-git and SplitBox contributors
+     SPDX-License-Identifier: GPL-3.0-only -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <queries><package android:name="dev.splitbox.app.benchmark" /></queries>
+    <application android:label="SplitBox benchmark">
+        <provider android:name="androidx.core.content.FileProvider"
+            android:authorities="dev.splitbox.benchmark.fixtures"
+            android:exported="false" android:grantUriPermissions="true">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/fixture_paths" />
+        </provider>
+    </application>
+</manifest>

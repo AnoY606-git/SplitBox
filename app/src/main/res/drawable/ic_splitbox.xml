@@ -1,0 +1,7 @@
+<!-- Copyright (C) 2026 AnoY606-git and SplitBox contributors
+     SPDX-License-Identifier: GPL-3.0-only -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#6DE6C5" android:pathData="M54,24 L80,39 L54,54 L28,39 Z" />
+    <path android:fillColor="#B1F6E1" android:pathData="M28,46 L50,59 L50,85 L28,72 Z" />
+    <path android:fillColor="#39B99A" android:pathData="M58,59 L80,46 L80,72 L58,85 Z" />
+</vector>

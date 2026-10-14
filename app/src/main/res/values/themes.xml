@@ -1,0 +1,13 @@
+<!-- Copyright (C) 2026 AnoY606-git and SplitBox contributors
+     SPDX-License-Identifier: GPL-3.0-only -->
+<resources>
+    <style name="Theme.SplitBox" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:windowBackground">#111817</item>
+        <item name="android:colorAccent">#6DE6C5</item>
+        <item name="android:windowSplashScreenBackground">#111817</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_splitbox</item>
+    </style>
+</resources>

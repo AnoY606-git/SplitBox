@@ -1,0 +1,43 @@
+name: Ошибка
+description: Воспроизводимая проблема установки или интерфейса
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Не прикладывайте приватные APK, ключи подписи или полные системные логи. Для уязвимости используйте SECURITY.md.
+  - type: input
+    id: version
+    attributes:
+      label: Версия SplitBox
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Устройство, Android и ROM
+      description: Модель, версия Android/API и название ROM; для Shizuku также версия и режим запуска.
+    validations:
+      required: true
+  - type: dropdown
+    id: backend
+    attributes:
+      label: Способ установки
+      options: [System, Root, Shizuku, Не относится к установке]
+    validations:
+      required: true
+  - type: input
+    id: format
+    attributes:
+      label: Формат и приблизительный размер файла
+      description: APK/APKS/APKM/XAPK/ZIP, число частей и наличие OBB, если известно.
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Шаги, ожидаемый и фактический результат
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Диагностическое сообщение
+      description: Удалите личные пути, URI и персональные данные.

@@ -1,0 +1,21 @@
+name: Предложение
+description: Улучшение удобства, стабильности или возможностей
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Какую задачу или проблему нужно решить?
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Предлагаемое поведение и альтернативы
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Дополнительный контекст
+      description: Устройство, сценарий и связь со стабильностью или производительностью.

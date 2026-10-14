@@ -1,0 +1,52 @@
+// Copyright (C) 2026 AnoY606-git and SplitBox contributors
+// SPDX-License-Identifier: GPL-3.0-only
+package dev.splitbox.app.installer
+
+import java.io.InputStream
+import java.util.concurrent.Callable
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+
+interface CommandRunner {
+    fun run(command: List<String>, input: InputStream? = null, timeoutSeconds: Long = 120): PmResult
+}
+
+/** Параллельное чтение потоков исключает взаимную блокировку; таймаут или прерывание завершают дочерний процесс. */
+class ProcessRunner : CommandRunner {
+    private val active = java.util.concurrent.ConcurrentHashMap.newKeySet<Process>()
+    fun cancelAll() { active.forEach { it.destroyForcibly() } }
+    override fun run(command: List<String>, input: InputStream?, timeoutSeconds: Long): PmResult {
+        val process = ProcessBuilder(command).redirectErrorStream(true).start()
+        active.add(process)
+        val workers = Executors.newFixedThreadPool(2) { r -> Thread(r, "splitbox-process").apply { isDaemon = true } }
+        try {
+            val output = workers.submit(Callable {
+                process.inputStream.use { stream ->
+                    val kept = java.io.ByteArrayOutputStream()
+                    val buffer = ByteArray(8192)
+                    while (true) {
+                        val count = stream.read(buffer)
+                        if (count < 0) break
+                        if (kept.size() < 131072) kept.write(buffer, 0, minOf(count, 131072 - kept.size()))
+                    }
+                    kept.toString(Charsets.UTF_8.name())
+                }
+            })
+            val writer = workers.submit(Callable {
+                process.outputStream.use { sink -> input?.copyTo(sink, 65536) }
+            })
+            check(process.waitFor(timeoutSeconds, TimeUnit.SECONDS)) { "Превышено время ожидания команды ($timeoutSeconds с)" }
+            val result = PmResult(process.exitValue(), output.get(5, TimeUnit.SECONDS))
+            try { writer.get(5, TimeUnit.SECONDS) }
+            catch (e: Exception) {
+                if (result.success) throw java.io.IOException("Передача APK не завершена: ${result.output.take(1000)}", e)
+            }
+            return result
+        } finally {
+            process.destroy()
+            if (process.isAlive) process.destroyForcibly()
+            workers.shutdownNow()
+            active.remove(process)
+        }
+    }
+}

@@ -1,0 +1,38 @@
+# Локальные SDK/JDK, сгенерированные файлы и настройки IDE
+/.toolchain/
+/.gradle/
+/.kotlin/
+**/build/
+/.idea/
+/.vscode/
+*.iml
+__pycache__/
+*.py[cod]
+*.hprof
+*.log
+*.tmp
+*.bak
+/local.properties
+/dist/
+
+# Ключи подписи и локальные данные доступа
+/.signing/
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.key
+*.pem
+keystore.properties
+signing.properties
+.env
+.env.*
+
+# Служебные данные среды, не входящие в проект
+/.agents/
+/.codex/
+/.aws/
+.DS_Store
+Thumbs.db
+
+# APK/APKS/XAPK/APKM в core/src/test/resources — необходимые тестовые пакеты.

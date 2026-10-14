@@ -1,0 +1,7 @@
+<!-- Copyright (C) 2026 AnoY606-git and SplitBox contributors
+     SPDX-License-Identifier: GPL-3.0-only -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/launcher_background" />
+    <foreground android:drawable="@drawable/ic_splitbox" />
+    <monochrome android:drawable="@drawable/ic_splitbox" />
+</adaptive-icon>
