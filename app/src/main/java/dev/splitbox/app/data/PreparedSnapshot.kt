@@ -62,9 +62,10 @@ object PreparedSnapshot {
         .put("splitName", m.splitName ?: JSONObject.NULL).put("configForSplit", m.configForSplit ?: JSONObject.NULL)
         .put("isFeatureSplit", m.isFeatureSplit).put("usesSplits", JSONArray(m.usesSplits))
         .put("requiredSplitTypes", JSONArray(m.requiredSplitTypes.toList())).put("splitTypes", JSONArray(m.splitTypes.toList()))
+        .put("requestedPermissions", PermissionSnapshot.write(m.requestedPermissions))
     private fun readMetadata(j: JSONObject) = ApkMetadata(j.getString("packageName"), j.getLong("versionCode"),
         j.getString("versionName"), j.getInt("minSdk"), j.getInt("targetSdk"),
         j.optString("splitName").takeUnless { it == "null" || it.isEmpty() },
         j.optString("configForSplit").takeUnless { it == "null" || it.isEmpty() }, j.getBoolean("isFeatureSplit"),
-        strings(j.getJSONArray("usesSplits")), strings(j.getJSONArray("requiredSplitTypes")).toSet(), strings(j.getJSONArray("splitTypes")).toSet())
+        strings(j.getJSONArray("usesSplits")), strings(j.getJSONArray("requiredSplitTypes")).toSet(), strings(j.getJSONArray("splitTypes")).toSet(), PermissionSnapshot.read(j))
 }

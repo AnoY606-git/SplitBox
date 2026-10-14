@@ -61,6 +61,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
@@ -69,6 +70,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import dev.splitbox.app.inspector.AndroidInstalledPackageReader
+import dev.splitbox.app.inspector.InstalledPackageReader
 import dev.splitbox.app.model.AccessState
 import dev.splitbox.app.model.AppSettings
 import dev.splitbox.app.model.BackendMode
@@ -100,7 +103,10 @@ fun InstallScreen(
     onCheckStatus: () -> Unit,
     modifier: Modifier = Modifier,
     onRetrySave: () -> Unit = {},
+    installedPackageReader: InstalledPackageReader? = null,
 ) {
+    val packages = LocalContext.current.packageManager
+    val inspectorReader = installedPackageReader ?: remember(packages) { AndroidInstalledPackageReader(packages) }
     val busy = ui.phase.isBusy()
     val prepared = ui.prepared
     val workDir = prepared?.workDir?.absolutePath
@@ -177,6 +183,8 @@ fun InstallScreen(
                             Text(prepared.metadata.packageName, style = MaterialTheme.typography.bodyMedium, fontFamily = FontFamily.Monospace)
                         }
                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                        PackageInspectorButton(prepared, ui.selectedPaths, ui.appLabel,
+                            ready = ui.phase == OperationPhase.READY, reader = inspectorReader)
                         DetailRow("Файл", prepared.sourceName)
                         DetailRow("Выбрано APK", "${ui.selectedPaths.size} из ${prepared.apks.size}")
                         DetailRow("Размер установки", formatBytes(prepared.apks.filter { it.archivePath in ui.selectedPaths }.sumOf { it.size }))

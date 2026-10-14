@@ -12,7 +12,8 @@ data class ApkMetadata(
     val minSdk: Int, val targetSdk: Int,
     val splitName: String? = null, val configForSplit: String? = null,
     val isFeatureSplit: Boolean = false, val usesSplits: List<String> = emptyList(),
-    val requiredSplitTypes: Set<String> = emptySet(), val splitTypes: Set<String> = emptySet()
+    val requiredSplitTypes: Set<String> = emptySet(), val splitTypes: Set<String> = emptySet(),
+    val requestedPermissions: List<PermissionDeclaration>? = null
 )
 data class ApkEntry(
     val file: File, val archivePath: String, val metadata: ApkMetadata,

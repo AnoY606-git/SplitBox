@@ -11,6 +11,8 @@ import java.util.zip.ZipOutputStream
 
 /** Небольшие тестовые образцы проверяют реальные байтовые форматы AXML/protobuf/ZIP. */
 internal object CoreFixtures {
+    data class Permission(val name: String, val tag: String = "uses-permission", val maxSdk: Int? = null,
+        val namespace: String = "http://schemas.android.com/apk/res/android", val type: Int = 3)
     private fun ints(vararg values: Int): ByteArray = ByteBuffer.allocate(values.size * 4)
         .order(ByteOrder.LITTLE_ENDIAN).apply { values.forEach { putInt(it) } }.array()
     private fun short(value: Int): ByteArray = byteArrayOf(value.toByte(), (value ushr 8).toByte())
@@ -18,7 +20,8 @@ internal object CoreFixtures {
         short(type) + short(headerSize) + ints(body.size + 8) + body
     fun manifest(packageName: String = "dev.test", version: Int = 7, split: String? = null,
         configFor: String? = null, feature: Boolean = false, minSdk: Int = 23,
-        uses: List<String> = emptyList(), requiredTypes: String? = null, splitTypes: String? = null, versionMajor: Int = 0, legacyRequired: Boolean = false): ByteArray {
+        uses: List<String> = emptyList(), requiredTypes: String? = null, splitTypes: String? = null, versionMajor: Int = 0, legacyRequired: Boolean = false,
+        permissions: List<Permission> = emptyList()): ByteArray {
         val strings = mutableListOf<String>()
         fun index(s: String): Int = strings.indexOf(s).takeIf { it >= 0 } ?: strings.size.also { strings += s }
         val android = index("http://schemas.android.com/apk/res/android")
@@ -45,7 +48,11 @@ internal object CoreFixtures {
         splitTypes?.let { root += text("splitTypes", it, android) }
         fun end(name: String) = chunk(0x103, 16, ints(1, -1, -1, index(name)))
         val nodes = element("manifest", root) + element("uses-sdk", listOf(number("minSdkVersion", minSdk), number("targetSdkVersion", 36))) + end("uses-sdk") +
-            uses.fold(byteArrayOf()) { b, dep -> b + element("uses-split", listOf(text("name", dep, android))) + end("uses-split") } + end("manifest")
+            uses.fold(byteArrayOf()) { b, dep -> b + element("uses-split", listOf(text("name", dep, android))) + end("uses-split") } + permissions.fold(byteArrayOf()) { b, p ->
+                val attrs = mutableListOf(Attr(index(p.namespace), index("name"), index(p.name), p.type))
+                p.maxSdk?.let { attrs += number("maxSdkVersion", it) }
+                b + element(p.tag, attrs) + end(p.tag)
+            } + end("manifest")
         val encoded = strings.map { it.toByteArray(Charsets.UTF_8).let { b -> byteArrayOf(it.length.toByte(), b.size.toByte()) + b + byteArrayOf(0) } }
         var offset = 0
         val offsets = encoded.fold(byteArrayOf()) { b, s -> (b + ints(offset)).also { offset += s.size } }

@@ -26,6 +26,7 @@ class BinaryManifestReader {
         var metadata: ApkMetadata? = null
         var minSdk = 1; var targetSdk: Int? = null
         val uses = mutableListOf<String>()
+        val permissions = mutableListOf<PermissionDeclaration>()
         val stack = mutableListOf<String>()
         var position = u16(2)
         while (position < bytes.size) {
@@ -140,6 +141,13 @@ class BinaryManifestReader {
                         minSdk = integer("minSdkVersion", 1)!!; targetSdk = integer("targetSdkVersion", minSdk)
                         if (minSdk < 1 || targetSdk!! < 1) fail("Некорректный SDK манифеста")
                     }
+                    "uses-permission", "uses-permission-sdk-23", "uses-permission-sdk-m" -> if (stack.lastOrNull() == "manifest") {
+                        val name = text("name")?.takeIf { it.isNotBlank() }
+                            ?: fail("Элемент $element без атрибута android:name")
+                        val maxSdk = integer("maxSdkVersion")
+                        if (maxSdk != null && maxSdk < 1) fail("Некорректный maxSdkVersion разрешения")
+                        permissions += PermissionDeclaration(name, if (element == "uses-permission") 1 else 23, maxSdk)
+                    }
                     "uses-split" -> if (stack.lastOrNull() == "manifest") {
                         uses += text("name")?.takeIf { it.isNotBlank() } ?: fail("Элемент uses-split без атрибута name")
                     }
@@ -155,7 +163,8 @@ class BinaryManifestReader {
             position = end
         }
         if (stack.isNotEmpty()) fail("Незавершённый манифест")
-        return (metadata ?: fail("Манифест без корневого элемента")).copy(minSdk = minSdk, targetSdk = targetSdk ?: minSdk, usesSplits = uses.distinct())
+        return (metadata ?: fail("Манифест без корневого элемента")).copy(minSdk = minSdk, targetSdk = targetSdk ?: minSdk, usesSplits = uses.distinct(),
+            requestedPermissions = permissions.distinct())
     }
     private fun fail(message: String): Nothing = throw PreparationException(message)
 }
