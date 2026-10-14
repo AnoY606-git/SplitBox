@@ -18,7 +18,9 @@ class StagedApkPreparer {
         if (files.size !in 1..128) throw PreparationException("Выберите от 1 до 128 APK одного приложения")
         if (device.sdk < 1 || device.densityDpi < 1 || device.abis.isEmpty()) throw PreparationException("Некорректный профиль устройства")
         if (options.maxExpandedBytes <= 0) throw PreparationException("Лимит размера должен быть положительным")
-        val root = workDir.canonicalFile.toPath()
+        // Псевдоним в предке workDir допустим; ссылки внутри проверяются до канонизации APK.
+        val root = workDir.absoluteFile.toPath()
+        val canonicalRoot = workDir.canonicalFile.toPath()
         val seen = mutableSetOf<java.nio.file.Path>()
         var total = 0L
         try {
@@ -33,7 +35,7 @@ class StagedApkPreparer {
                     if (Files.isSymbolicLink(current)) throw PreparationException("Символические ссылки APK запрещены")
                     current = current.parent
                 }
-                if (!staged.file.isFile || !staged.file.canonicalFile.toPath().startsWith(root))
+                if (!staged.file.isFile || !staged.file.canonicalFile.toPath().startsWith(canonicalRoot))
                     throw PreparationException("Временный APK недоступен")
                 if (seen.any { Files.isSameFile(it, path) } || !seen.add(staged.file.canonicalFile.toPath()))
                     throw PreparationException("Повторяющийся файл APK")

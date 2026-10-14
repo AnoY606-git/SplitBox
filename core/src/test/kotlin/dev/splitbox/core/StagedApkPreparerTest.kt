@@ -31,6 +31,38 @@ class StagedApkPreparerTest {
         assertTrue(result.obbFiles.isEmpty())
         assertEquals(3, dir.listFiles()!!.size)
     }
+    @Test fun acceptsAncestorAliasButRejectsLinksInsideWorkDirectory() = fixture { parent ->
+        val actualParent = File(parent, "actual").apply { mkdir() }
+        val aliasParent = File(parent, "alias")
+        Files.createSymbolicLink(aliasParent.toPath(), actualParent.toPath())
+        val work = File(aliasParent, "work").apply { mkdir() }
+        val base = apk(work, "base")
+        val density = apk(work, "density", CoreFixtures.manifest(split = "config.xhdpi"))
+
+        val result = prepare(work, listOf(base, density))
+        assertEquals(listOf(base.file, density.file), result.apks.map { it.file })
+        assertTrue(result.apks.all { it.selected })
+        assertEquals(work, result.workDir)
+
+        val link = File(work, "base-link")
+        Files.createSymbolicLink(link.toPath(), base.file.toPath())
+        assertThrows(PreparationException::class.java) { prepare(work, listOf(base.copy(file = link))) }
+        val inner = File(work, "inner").apply { mkdir() }
+        val directoryLink = File(work, "directory-link")
+        Files.createSymbolicLink(directoryLink.toPath(), inner.toPath())
+        val innerBase = apk(inner, "inner-base")
+        assertThrows(PreparationException::class.java) {
+            prepare(work, listOf(innerBase.copy(file = File(directoryLink, "inner-base"))))
+        }
+        assertThrows(PreparationException::class.java) {
+            prepare(work, listOf(base.copy(file = File(work, "directory-link/../base"))))
+        }
+        val workLink = File(aliasParent, "work-link")
+        Files.createSymbolicLink(workLink.toPath(), work.toPath())
+        assertThrows(PreparationException::class.java) {
+            prepare(workLink, listOf(base.copy(file = File(workLink, "base"))))
+        }
+    }
     @Test fun rejectsMixedPackageAndVersion() = fixture { dir ->
         val base = apk(dir, "base")
         listOf(CoreFixtures.manifest(packageName = "dev.other", split = "config.ru"),
