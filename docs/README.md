@@ -28,6 +28,7 @@ SplitBox 1.0 — Android-приложение с отдельным JVM-ядро
 | InstallBackend и выбор способа | [InstallBackend](../app/src/main/java/dev/splitbox/app/installer/InstallBackend.kt) |
 | System journal и восстановление | [InstallJournal](../app/src/main/java/dev/splitbox/app/data/InstallJournal.kt), [SystemSessionRecovery](../app/src/main/java/dev/splitbox/app/data/SystemSessionRecovery.kt) |
 | Root/Shizuku: UUID, фазы и доказанный результат | [PrivilegedOperationStore](../app/src/main/java/dev/splitbox/app/data/PrivilegedOperationStore.kt), [PrivilegedOperationTracker](../app/src/main/java/dev/splitbox/app/data/PrivilegedOperationTracker.kt) |
+| Возврат из permission/OBB export | [ReadyStateRecovery](../app/src/main/java/dev/splitbox/app/data/ReadyStateRecovery.kt) |
 | READY checkpoint | [PreparedSnapshot](../app/src/main/java/dev/splitbox/app/data/PreparedSnapshot.kt) |
 | История и настройки на диске | [Repositories](../app/src/main/java/dev/splitbox/app/data/Repositories.kt) |
 

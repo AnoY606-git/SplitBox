@@ -1,5 +1,30 @@
 # Проверки SplitBox 1.0
 
+## Сборка 4: исправления после аудита
+
+Дата: **14 октября 2026**. Релиз [v1.0-build4](https://github.com/AnoY606-git/SplitBox/releases/tag/v1.0-build4): versionName **1.0**, versionCode **4**, minSdk 34 / target SDK 36. Первый тег `v1.0` соответствует сборке 3; сведения о ней сохранены ниже отдельно.
+
+Полный локальный прогон `:core:test :app:testDebugUnitTest :app:lintDebug :app:lintRelease :app:assembleDebug :app:assembleRelease :fixture:assembleDebug` завершился **BUILD SUCCESSFUL**. Прошли **173 JVM-теста** (core 65, app 108) и **12 Python-тестов**, без failures/errors/skipped. Lint debug/release: **0 ошибок / 5 предупреждений** в каждом варианте (`UseKtx` × 4, `ObsoleteSdkInt` × 1).
+
+Добавлены 29 регрессионных и граничных тестов. До исправлений новые сценарии воспроизводили ошибки: 6 падений в ядре, 10 в восстановлении состояния и отдельное падение маршрутизации отмены экспорта. Проверяются общий ABI модулей, ресурсный versionName, фактическое состояние системной сессии, атомарный возврат READY, отказ записи с повтором и актуальные результаты очереди/валидатора после успеха, ошибки и отмены экспорта. Эти проверки используют production helpers и настоящие очереди с управляемым coroutine scheduler.
+
+Подписанный R8 APK: **2 668 988 байт**, SHA-256 `32d3768435818d03a2144698c86e01451e2697fc089b00d64b4b9ff763ab8ded`. Сертификат издателя прежний: SHA-256 `276541bb10833dc482bdf54f4760498633a38316b13a29901b84cfdb3a316478`. Проверка подписи и APK audit пройдены: package/version/SDK, разрешения, CRC, alignment и legal assets. INTERNET отсутствует.
+
+На отдельном AOSP API 34 x86_64 AVD `splitbox-fixes-api34` проверены:
+
+- Настоящая незапечатанная `PackageInstaller.Session`, созданная временной instrumentation с сохранённым `COMMITTED`: после остановки процесса и запуска исправленного debug APK показан прерванный результат; Android API подтвердил удаление сессии и освобождение журнала. Это внедрение состояния в точке сбоя, а не случайный kill в узком временном окне.
+- APK со строковым ресурсом в `versionName`, собранный AAPT2: Android принимает его, SplitBox импортирует, сохраняет package/versionCode и показывает отсутствие разрешённого названия версии.
+- На финальной debug-сборке 4: отказ в System permission → выбор Root → остановка процесса → запуск. Пакет, выбранный APK и backend ROOT восстановлены; Root-команда не запускалась.
+- Обычное обновление подписанного приложения через `adb install -r` со сборки 3 до 4 прошло; Package Manager подтвердил `versionCode=4`, `versionName=1.0`.
+- На финальном подписанном R8 APK прошли SAF-импорт ресурсного fixture, выдача разрешения, системное подтверждение и реальное обновление fixture. Android подтвердил `versionName=1.2-resource`, `installerPackageName=dev.splitbox.app`; crash buffer пуст.
+
+Гонки завершения валидатора/записи во время экспорта и его отмена проверены детерминированными coroutine-тестами. На устройстве этот узкий timing-сценарий не воспроизводился. Временные instrumentation/fixtures не входят в release или архив исходников. Личный Waydroid не использовался.
+
+Результаты прежних измерений не являются новым benchmark-прогоном сборки 4. Реальный Magisk/KernelSU, физический ARM и Android 15/16 повторно не проверялись. Границы проверок устройства перечислены ниже для каждой сборки.
+
+<details>
+<summary>Архив: опубликованная сборка 3 и прежние измерения</summary>
+
 Дата: **14 октября 2026**. Package `dev.splitbox.app`, versionName **1.0**, versionCode **3**, minSdk 34 / target SDK 36. Автор: [AnoY606-git](https://github.com/AnoY606-git).
 
 ## Автоматические проверки
@@ -83,3 +108,5 @@ JVM-проверки охватывают архивы, metadata/targeting, со
 Установка через реальный Magisk/KernelSU, физический ARM, Android 15/16 runtime, OEM/work profiles, многогигабайтный stress test и runtime 16 KiB не проверены. 16 KiB alignment APK/ELF проверяется статически при упаковке и не доказывает работу на соответствующем ядре. При шрифте 200% выполнена визуальная проверка, но речь и полный маршрут TalkBack на устройстве не проверялись; семантика этапов/заголовков проверена по коду.
 
 Статус каждого GitHub-прогона доступен в [Actions](https://github.com/AnoY606-git/SplitBox/actions/workflows/ci.yml). Локальные проверки и эмуляторные числа не заменяют испытания на реальных устройствах. [TESTING](TESTING.md) описывает воспроизведение, [ARCHITECTURE](ARCHITECTURE.md) — контракты сохранения/восстановления и честный UNKNOWN без автоматического повторного commit.
+
+</details>

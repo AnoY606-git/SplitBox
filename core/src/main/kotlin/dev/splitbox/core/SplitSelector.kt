@@ -126,8 +126,16 @@ class SplitSelector {
         val targets = apks.associateWith { configTarget(it) }
         if (!fromToc && targets.values.any { it?.kind == ConfigKind.GENERIC })
             throw PreparationException("Неизвестные условия совместимости конфигурационной части; требуется bundletool toc.pb")
-        val bestAbiByOwner = apks.filter { targets[it]?.kind == ConfigKind.ABI && isCompatible(it, device) }
-            .groupBy { owner(it) }.mapValues { (_, entries) -> device.abis.firstOrNull { abi -> entries.any { targets[it]?.value == abi } } }
+        // Все модули работают в одном процессе: выбираем общую ABI с учётом библиотек основных APK.
+        // Ручной режим и готовый вариант toc сохраняют собственный набор конфигураций.
+        val bestAbi = if (autoSelect && !fromToc) {
+            val abiSets = apks.filter { targets[it]?.kind == ConfigKind.ABI }.groupBy { owner(it) }.values.map { entries ->
+                entries.filter { isCompatible(it, device) }.map { targets.getValue(it)!!.value }.toSet()
+            } + primary.map { it.nativeAbis }.filter { it.isNotEmpty() }
+            device.abis.firstOrNull { abi -> abiSets.all { abi in it } }.also {
+                if (it == null && abiSets.isNotEmpty()) throw PreparationException("Нет общей совместимой ABI для всех модулей")
+            }
+        } else null
         val bestDensityByOwner = apks.filter { targets[it]?.kind == ConfigKind.DENSITY && isCompatible(it, device) }
             .groupBy { owner(it) }.mapValues { (_, entries) -> chooseDensity(entries.map { targets.getValue(it)!!.value.toInt() }, device.densityDpi) }
         val result = apks.map { apk ->
@@ -136,7 +144,7 @@ class SplitSelector {
             val compatible = if (fromToc && target?.kind == ConfigKind.GENERIC) apk.metadata.minSdk <= device.sdk &&
                 (apk.nativeAbis.isEmpty() || apk.nativeAbis.any { it in device.abis }) else isCompatible(apk, device)
             val chosen = compatible && (mandatory || fromToc || !autoSelect || when (target?.kind) {
-                ConfigKind.ABI -> bestAbiByOwner[owner(apk)] == target.value
+                ConfigKind.ABI -> bestAbi == target.value
                 ConfigKind.DENSITY -> bestDensityByOwner[owner(apk)] == target.value.toInt()
                 else -> true
             })

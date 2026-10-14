@@ -130,8 +130,10 @@ class BinaryManifestReader {
                         val split = text("split", "")?.takeIf { it.isNotEmpty() }
                         val configFor = text("configForSplit", "")?.takeIf { it.isNotEmpty() }
                         (listOfNotNull(split, configFor)).forEach { if (!Regex("[A-Za-z0-9_.]+") .matches(it)) fail("Некорректный идентификатор части") }
+                        // Отображаемая версия может ссылаться на ресурс; без resources.arsc оставляем её неизвестной.
+                        val versionName = if (attrs[android to "versionName"]?.type == 1) "" else text("versionName").orEmpty()
                         metadata = ApkMetadata(packageName, (major.toLong() shl 32) or (version.toLong() and 0xffffffffL),
-                            text("versionName").orEmpty(), minSdk, minSdk, split, configFor,
+                            versionName, minSdk, minSdk, split, configFor,
                             integer("isFeatureSplit", 0) != 0, requiredSplitTypes = types("requiredSplitTypes") + (if (integer("isSplitRequired", 0) != 0) setOf(LEGACY_ANY_SPLIT) else emptySet()), splitTypes = types("splitTypes"))
                     }
                     "uses-sdk" -> if (stack.lastOrNull() == "manifest") {

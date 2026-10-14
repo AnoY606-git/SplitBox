@@ -60,3 +60,23 @@ data class SystemSessionLedger(val current: PendingInstall? = null, val retained
         else copy(retained = retained.map { if (it.sessionId == record.sessionId) record else it })
     fun consume(id: Int) = copy(current = current?.takeUnless { it.sessionId == id }, retained = retained.filterNot { it.sessionId == id })
 }
+
+/** Проверка существующей сессии после возврата в приложение; вызова commit здесь нет. */
+internal suspend fun recoverSystemSession(stored: PendingInstall, isCurrent: () -> Boolean,
+    readSealed: suspend () -> Boolean?, abandon: suspend () -> Unit,
+    write: (PendingInstall) -> Unit, missing: () -> Unit, confirm: suspend () -> Unit) {
+    if (stored.state == "FINISHED" || !isCurrent()) return
+    val sealed = readSealed()
+    if (!isCurrent()) return
+    when (sealed) {
+        null -> missing()
+        false -> {
+            // Android запечатывает сессию в момент commit; незапечатанная сессия ещё не передана установщику.
+            abandon()
+            if (!isCurrent()) return
+            write(stored.copy(state = "FINISHED", success = false, confirmation = null,
+                message = "Подготовка системной сессии была прервана. Повторите установку."))
+        }
+        true -> if (stored.confirmation != null) confirm()
+    }
+}

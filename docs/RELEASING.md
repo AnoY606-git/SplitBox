@@ -2,7 +2,7 @@
 
 ## Версия и проверки
 
-`gradle.properties` — единственный источник версии. Текущее приложение: versionName `1.0`, versionCode `3`. У каждого выпускаемого обновления повышайте versionCode. versionName допускает `major.minor`, `major.minor.patch` и суффикс prerelease. Обновляйте CHANGELOG и выполняйте команду из [TESTING](TESTING.md) в чистом checkout.
+`gradle.properties` — единственный источник версии. Текущее приложение: versionName `1.0`, versionCode `4`. У каждого выпускаемого обновления повышайте versionCode. versionName допускает `major.minor`, `major.minor.patch` и суффикс prerelease. Обновляйте CHANGELOG и выполняйте команду из [TESTING](TESTING.md) в чистом checkout.
 
 CI (`.github/workflows/ci.yml`) выполняет source checks, Python/JVM tests, lint, debug/unsigned release и fixture build; проверяет APK policy и сохраняет результаты на 14 дней. Actions закреплены на commit SHA, permissions ограничены contents:read, checkout не сохраняет credentials. CI не публикует Release и не получает production signing secrets.
 
@@ -45,7 +45,7 @@ python3 scripts/package.py --apk app/build/outputs/apk/release/app-release-unsig
 
 `SHA256SUMS` описывает только артефакты текущей команды: source ZIP и, при явном APK, этот APK и `<имя APK>.signature.txt`. Старые файлы из той же папки не подхватываются. Source ZIP включает Wrapper/JAR, CI, исходники и пять binary fixtures; SDK, keys, caches, logs и host metadata исключены. ZIP entries нормализованы для повторяемой упаковки исходников; побитовая воспроизводимость APK не заявляется.
 
-Для каждого релиза используйте отдельную папку. В публичную поставку включите подписанный APK, соответствующие исходники, signature record, SHA256SUMS и заметки с проверенными сценариями/ограничениями. Сохраните LICENSE/NOTICE/авторство и уведомления зависимостей. Перед публикацией отдельно проверьте установку и обновление на устройстве. В заметках разделяйте настоящие APK fixtures и синтетические UI-наборы, emulator smoke и измерения на физическом устройстве. Не заявляйте physical ARM/Magisk/16 KiB runtime или выигрыш производительности без соответствующего прогона и исходных результатов. Версия `1.0` / code `3`, GPL-3.0-only и авторство AnoY606-git должны совпадать в APK, исходниках и документации.
+Для каждого релиза используйте отдельную папку. В публичную поставку включите подписанный APK, соответствующие исходники, signature record, SHA256SUMS и заметки с проверенными сценариями/ограничениями. Сохраните LICENSE/NOTICE/авторство и уведомления зависимостей. Перед публикацией отдельно проверьте установку и обновление на устройстве. В заметках разделяйте настоящие APK fixtures и синтетические UI-наборы, emulator smoke и измерения на физическом устройстве. Не заявляйте physical ARM/Magisk/16 KiB runtime или выигрыш производительности без соответствующего прогона и исходных результатов. Версия `1.0` / code `4`, GPL-3.0-only и авторство AnoY606-git должны совпадать в APK, исходниках и документации.
 
 ## Репозиторий и теги
 
@@ -58,3 +58,5 @@ git status --short
 ```
 
 Для изменения используйте свою Git identity и отдельную ветку. После проверок тег `vVERSION` должен указывать на тот же commit, из которого упакованы исходники. Публикуйте APK, source ZIP, signature record и SHA256SUMS вместе с описанием изменений и ограничений. Не загружайте keystore или signing secrets в репозиторий, Release assets и CI artifacts. Создание tag/Release выполняется отдельно и не является действием скрипта упаковки.
+
+Обновление с прежним versionName `1.0` и новым versionCode `4` опубликовано отдельным тегом `v1.0-build4`. Существующие теги и файлы старого релиза не заменяются. Для следующих сборок используйте новый уникальный тег и явно указывайте номер сборки в заголовке релиза.

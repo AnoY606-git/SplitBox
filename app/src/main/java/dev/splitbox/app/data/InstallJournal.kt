@@ -15,18 +15,16 @@ import org.json.JSONObject
 
 /** Общий для процесса снимок журнала; разбор и подтверждённая запись выполняются на IO. */
 class InstallJournal private constructor(context: Context) {
-    private data class Snapshot(val ledger: SystemSessionLedger = SystemSessionLedger(),
-        val prepared: String? = null, val permission: Triple<String, String, String>? = null)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val lock = Any()
-    @Volatile private var snapshot = Snapshot()
+    @Volatile private var snapshot = InstallJournalSnapshot()
     @Volatile private var loaded = false
     private lateinit var prefs: SharedPreferences
     private val mutable = MutableStateFlow<PendingInstall?>(null)
     val state: StateFlow<PendingInstall?> = mutable
     private val mutableRetained = MutableStateFlow<List<PendingInstall>>(emptyList())
     val retained: StateFlow<List<PendingInstall>> = mutableRetained
-    private val writes = RevisionedSaveQueue<Snapshot>(scope) { persist(it) }
+    private val writes = RevisionedSaveQueue<InstallJournalSnapshot>(scope) { persist(it) }
     val persistence: StateFlow<SaveQueueState> = writes.state
     private val initial = scope.async {
         prefs = context.applicationContext.getSharedPreferences("install_journal", Context.MODE_PRIVATE)
@@ -38,7 +36,7 @@ class InstallJournal private constructor(context: Context) {
         val permission = source?.let { Triple(it, prefs.getString("resumeName", "Архив")!!,
             prefs.getString("resumeDirectory", "")!!) }
         synchronized(lock) {
-            snapshot = Snapshot(SystemSessionLedger(current, retained), prefs.getString("preparedDirectory", null), permission)
+            snapshot = InstallJournalSnapshot(SystemSessionLedger(current, retained), prefs.getString("preparedDirectory", null), permission)
             loaded = true
             publish(snapshot.ledger)
         }
@@ -53,7 +51,7 @@ class InstallJournal private constructor(context: Context) {
     fun isLaunchCurrent(token: String): Boolean = snapshot.ledger.isLaunchCurrent(token)
     fun find(sessionId: Int): PendingInstall? = snapshot.ledger.find(sessionId)
     private fun publish(ledger: SystemSessionLedger) { mutable.value = ledger.current; mutableRetained.value = ledger.retained }
-    private fun update(transform: (Snapshot) -> Snapshot) = synchronized(lock) {
+    private fun update(transform: (InstallJournalSnapshot) -> InstallJournalSnapshot) = synchronized(lock) {
         check(loaded) { "Журнал установки ещё загружается" }
         val next = transform(snapshot)
         if (next != snapshot) {
@@ -63,7 +61,7 @@ class InstallJournal private constructor(context: Context) {
         }
     }
     private fun mutate(transform: (SystemSessionLedger) -> SystemSessionLedger) = update { it.copy(ledger = transform(it.ledger)) }
-    private fun persist(value: Snapshot) {
+    private fun persist(value: InstallJournalSnapshot) {
         val editor = prefs.edit()
         if (value.ledger.current == null) editor.remove("session")
         else editor.putString("session", encode(value.ledger.current).toString())
@@ -96,6 +94,7 @@ class InstallJournal private constructor(context: Context) {
     fun saveAwaitingPermission(source: String, name: String, workDir: String) = update {
         it.copy(permission = Triple(source, name, workDir))
     }
+    fun returnPermissionToReady(directory: String) = update { it.returnPermissionToReady(directory) }
     fun awaitingPermission(): Triple<String, String, String>? = snapshot.permission
     fun clearAwaitingPermission() = update { it.copy(permission = null) }
     companion object {

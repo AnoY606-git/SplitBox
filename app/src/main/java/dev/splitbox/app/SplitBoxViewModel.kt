@@ -621,18 +621,13 @@ class SplitBoxViewModel(application: Application) : AndroidViewModel(application
                 retryCompletedPersistence()
                 val stored = journal.read()
                 if (stored != null) {
-                    if (stored.state == "WRITING" && operation?.isActive != true) {
-                        withContext(Dispatchers.IO) { runCatching { context.packageManager.packageInstaller.abandonSession(stored.sessionId) } }
-                        if (!journal.isCurrent(stored)) return@start
-                        journal.write(stored.copy(state = "FINISHED", success = false, message = "Подготовка системной сессии была прервана. Повторите установку."))
-                    } else if (stored.state != "FINISHED") {
-                        val info = withContext(Dispatchers.IO) { context.packageManager.packageInstaller.getSessionInfo(stored.sessionId) }
-                        if (!journal.isCurrent(stored)) return@start
-                        if (info == null) {
-                            // Порядок и сроки удаления SessionInfo и доставки итогового уведомления не гарантированы.
-                            journal.markMissing(stored.sessionId)
-                        } else if (stored.confirmation != null) offerConfirmation(stored)
-                    }
+                    recoverSystemSession(stored, { journal.isCurrent(stored) && operation?.isActive != true },
+                        readSealed = { withContext(Dispatchers.IO) { context.packageManager.packageInstaller.getSessionInfo(stored.sessionId)?.isSealed } },
+                        abandon = { withContext(Dispatchers.IO) {
+                            if (journal.isCurrent(stored)) context.packageManager.packageInstaller.abandonSession(stored.sessionId)
+                        } },
+                        write = journal::write, missing = { journal.markMissing(stored.sessionId) },
+                        confirm = { offerConfirmation(stored) })
                     return@start
                 }
                 val resume = journal.awaitingPermission()
@@ -641,7 +636,7 @@ class SplitBoxViewModel(application: Application) : AndroidViewModel(application
                     return@start
                 }
                 if (operation?.isActive == true) return@start
-                if (settings.value.backend != BackendMode.SYSTEM) { journal.clearAwaitingPermission(); return@start }
+                if (settings.value.backend != BackendMode.SYSTEM) { journal.returnPermissionToReady(resume.third); journal.flush(); restoreReadyPackage(); return@start }
                 if (mutableUi.value.prepared == null && !restoredPermission) {
                     restoredPermission = true
                     val restored = withContext(Dispatchers.IO) { runCatching { PreparedSnapshot.read(File(resume.third), stager.root) }.getOrNull() }
@@ -674,6 +669,7 @@ class SplitBoxViewModel(application: Application) : AndroidViewModel(application
     }
     fun cancelOperation() {
         if (!mutableUi.value.canCancel) { message("Передача установки Android уже началась. Дождитесь результата."); return }
+        if (cancelObbExport(mutableUi.value, operation)) return
         val stored = journal.read()
         if (stored != null && stored.state != "FINISHED") {
             viewModelScope.launch {
@@ -685,7 +681,7 @@ class SplitBoxViewModel(application: Application) : AndroidViewModel(application
             }
         } else if (operation?.isActive == true) operation?.cancel()
         else {
-            journal.clearAwaitingPermission()
+            journal.awaitingPermission()?.let { journal.returnPermissionToReady(it.third) }
             mutableUi.update { it.copy(phase = if (it.prepared == null) OperationPhase.IDLE else OperationPhase.READY, title = "Операция отменена", canCancel = false) }
         }
     }
@@ -708,7 +704,8 @@ class SplitBoxViewModel(application: Application) : AndroidViewModel(application
         }
     }
     fun updateSettings(value: AppSettings) {
-        if (journal.isReady && value.backend != settings.value.backend) journal.clearAwaitingPermission()
+        if (journal.isReady && value.backend != settings.value.backend)
+            journal.awaitingPermission()?.let { journal.returnPermissionToReady(it.third) }
         runCatching { settingsRepository.update(value) }.onFailure { message(it.message ?: "Некорректная настройка") }
     }
     fun refreshAccess() {
@@ -752,42 +749,39 @@ class SplitBoxViewModel(application: Application) : AndroidViewModel(application
     fun exportObb(destination: Uri) {
         if (busy()) { message("Дождитесь завершения операции"); return }
         cleanupRetry.discard()
-        journal.detachUnknown()
-        val before = mutableUi.value.let { if (it.phase == OperationPhase.UNKNOWN) it.copy(phase = OperationPhase.READY,
-            title = "Подготовленный пакет", pendingPackageName = null) else it }
+        val before = mutableUi.value
         val prepared = before.prepared ?: return
         if (prepared.obbFiles.isEmpty()) { message("В пакете нет OBB"); return }
         operation = viewModelScope.launch {
             try {
-                mutableUi.update { it.copy(phase = OperationPhase.COPYING, title = "Экспорт OBB", progress = null, canCancel = true) }
-                val job = currentCoroutineContext().job
-                withContext(Dispatchers.IO) {
-                    val names = HashSet<String>()
-                    val output = context.contentResolver.openOutputStream(destination, "wt") ?: throw IOException("Не удалось открыть место экспорта")
-                    ZipOutputStream(output).use { zip ->
-                        prepared.obbFiles.forEach { entry ->
-                            val name = entry.archivePath.substringAfterLast('/')
-                            ObbPolicy.destination(Process.myUid() / 100000, prepared.metadata.packageName, prepared.metadata.versionCode, name)
-                            check(names.add(name)) { "Повторяющееся имя OBB" }
-                            check(entry.file.isFile && entry.file.length() == entry.size) { "OBB уже удалён из кэша. Выберите исходный архив заново." }
-                            zip.putNextEntry(ZipEntry("${prepared.metadata.packageName}/$name"))
-                            entry.file.inputStream().use { input ->
-                                val buffer = ByteArray(65536)
-                                while (true) {
-                                    job.ensureActive()
-                                    val count = input.read(buffer)
-                                    if (count < 0) break
-                                    zip.write(buffer, 0, count)
+                runObbExport(before, mutableUi, { checkpointOwner }, { selectionWrites.state.value }, { selectionValidator.state.value }) {
+                    val job = currentCoroutineContext().job
+                    withContext(Dispatchers.IO) {
+                        val names = HashSet<String>()
+                        val output = context.contentResolver.openOutputStream(destination, "wt") ?: throw IOException("Не удалось открыть место экспорта")
+                        ZipOutputStream(output).use { zip ->
+                            prepared.obbFiles.forEach { entry ->
+                                val name = entry.archivePath.substringAfterLast('/')
+                                ObbPolicy.destination(Process.myUid() / 100000, prepared.metadata.packageName, prepared.metadata.versionCode, name)
+                                check(names.add(name)) { "Повторяющееся имя OBB" }
+                                check(entry.file.isFile && entry.file.length() == entry.size) { "OBB уже удалён из кэша. Выберите исходный архив заново." }
+                                zip.putNextEntry(ZipEntry("${prepared.metadata.packageName}/$name"))
+                                entry.file.inputStream().use { input ->
+                                    val buffer = ByteArray(65536)
+                                    while (true) {
+                                        job.ensureActive()
+                                        val count = input.read(buffer)
+                                        if (count < 0) break
+                                        zip.write(buffer, 0, count)
+                                    }
                                 }
+                                zip.closeEntry()
                             }
-                            zip.closeEntry()
                         }
                     }
                 }
-                mutableUi.value = before
                 message("OBB экспортированы в ZIP")
             } catch (e: Exception) {
-                mutableUi.value = before
                 message("Экспорт не завершён: ${e.message ?: "отменён"}. Неполный ZIP можно удалить в выбранной папке.")
             } finally { withContext(NonCancellable) { refreshCache() } }
         }
