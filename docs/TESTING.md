@@ -3,7 +3,7 @@
 ## Автоматические проверки
 
 ```bash
-./gradlew :core:test :app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:assembleRelease :fixture:assembleDebug
+./gradlew :core:test :app:testDebugUnitTest :app:lintDebug :app:lintRelease :app:assembleDebug :app:assembleRelease :fixture:assembleDebug
 python3 -m unittest discover -s scripts/tests -v
 python3 scripts/check_repository.py --apk app/build/outputs/apk/release/app-release-unsigned.apk
 ```
@@ -39,7 +39,15 @@ Linux helper использует закреплённый bundletool и лок�
 
 | Сценарий | Что должно произойти |
 | --- | --- |
-| SAF/VIEW/SEND, известный и неизвестный размер | Источник читается с ограничением объёма; отмена не оставляет чужих файлов |
+| SAF/VIEW/SEND/SEND_MULTIPLE, известный и неизвестный размер | Источник читается с ограничением объёма; отмена не оставляет чужих файлов |
+| Несколько raw APK через SAF и SEND_MULTIPLE | Один пакет/версия, один base; общий byte limit, без временного ZIP; одинаковые имена не перезаписывают файлы |
+| Набор с другим пакетом, версией, дубликатом split или вложенным архивом | Понятная ошибка до вызова backend, очищен только рабочий каталог операции |
+| Cold restore набора без source.bin | Все staged APK и ручной выбор доступны; permission roundtrip и установка используют сохранённый base |
+| Поиск splits и selected-only | Фильтры не меняют выбранные APK/общий размер; при новом пакете очищаются |
+| История: поиск + статус + backend | UNKNOWN не попадает в ошибки/успех; reset возвращает полный список; отчёт копирует только просмотренную запись |
+| Сведения: новая/равная/пониженная версия, скрытый пакет | Сравнивается Long versionCode; недоступность не выдаётся за отсутствие установленного приложения |
+| Разрешения: разные выбранные splits, старый checkpoint | Объединяются только объявления выбранных APK; неполнота явно показана, список не объявляется выданными правами |
+| Диалог сведений закрыт или пакет заменён до ответа | Старый результат не публикуется поверх нового; чтение PackageManager не блокирует main |
 | System permission roundtrip / отказ | Возврат из настроек не дублирует установку; отказ понятен пользователю |
 | Root grant/deny/revoke | Настоящий root manager; чужая session не abandon, ошибки не маскируются |
 | Shizuku permission/UserService/binder loss | Запуск и выдача доступа явные; потеря соединения даёт корректный исход |

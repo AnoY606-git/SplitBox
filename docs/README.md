@@ -1,6 +1,6 @@
 # Путеводитель разработчика
 
-SplitBox 1.0 — Android-приложение с отдельным JVM-ядром. Для первой задачи достаточно собрать debug, пройти путь импорта собственного fixture и определить слой изменения по таблице ниже.
+SplitBox 1.1 — Android-приложение с отдельным JVM-ядром. Для первой задачи достаточно собрать debug, пройти путь импорта собственного fixture и определить слой изменения по таблице ниже.
 
 ## Порядок знакомства
 
@@ -20,8 +20,11 @@ SplitBox 1.0 — Android-приложение с отдельным JVM-ядро
 | Вкладки, тема, окно о приложении | [SplitBoxApp](../app/src/main/java/dev/splitbox/app/ui/SplitBoxApp.kt) |
 | Предпросмотр и список splits | [InstallScreen](../app/src/main/java/dev/splitbox/app/ui/InstallScreen.kt) |
 | Настройки/история | [SettingsScreen](../app/src/main/java/dev/splitbox/app/ui/SettingsScreen.kt), [HistoryScreen](../app/src/main/java/dev/splitbox/app/ui/HistoryScreen.kt) |
+| Сведения о версии и разрешениях | [PackageInspectorDialog](../app/src/main/java/dev/splitbox/app/ui/PackageInspectorDialog.kt), [PackageInspectionLoader](../app/src/main/java/dev/splitbox/app/inspector/PackageInspectionLoader.kt), [PermissionSnapshot](../app/src/main/java/dev/splitbox/app/data/PermissionSnapshot.kt) |
+| Фильтры и отчёт истории | [HistoryPresentation](../app/src/main/java/dev/splitbox/app/ui/HistoryPresentation.kt) |
 | Модели UI и настроек | [Models](../app/src/main/java/dev/splitbox/app/model/Models.kt) |
 | Копирование URI, подписи и staging | [PackageStager](../app/src/main/java/dev/splitbox/app/data/PackageStager.kt), [SourceCopier](../app/src/main/java/dev/splitbox/app/data/SourceCopier.kt) |
+| Импорт нескольких APK | [ImportSelection](../app/src/main/java/dev/splitbox/app/data/ImportSelection.kt), [MultiApkStager](../app/src/main/java/dev/splitbox/app/data/MultiApkStager.kt), [PackageImporter](../app/src/main/java/dev/splitbox/app/data/PackageImporter.kt), [StagedApkPreparer](../core/src/main/kotlin/dev/splitbox/core/StagedApkPreparer.kt) |
 | Индекс размера кэша | [CacheSizeIndex](../app/src/main/java/dev/splitbox/app/data/CacheSizeIndex.kt) |
 | Очередь сохранения и проверка выбора | [RevisionedSaveQueue](../app/src/main/java/dev/splitbox/app/data/RevisionedSaveQueue.kt), [SelectionValidator](../app/src/main/java/dev/splitbox/app/data/SelectionValidator.kt) |
 | Форматы архивов и совместимость | [ArchivePreparer](../core/src/main/kotlin/dev/splitbox/core/ArchivePreparer.kt), [SplitSelector](../core/src/main/kotlin/dev/splitbox/core/SplitSelector.kt) |
