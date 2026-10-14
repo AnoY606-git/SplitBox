@@ -5,7 +5,6 @@ package dev.splitbox.core
 import java.io.File
 import java.io.IOException
 import java.nio.file.Files
-import java.util.zip.CRC32
 
 class ArchivePreparer {
     fun prepare(source: File, sourceName: String, workDir: File, device: DeviceProfile,
@@ -56,7 +55,7 @@ class ArchivePreparer {
             val entries = candidates.entries.mapIndexed { index, (path, file) ->
                 checkCancelled(isCancelled)
                 onProgress("Чтение APK: ${index + 1}/${candidates.size}", (index + 1).toFloat() / candidates.size.coerceAtLeast(1))
-                inspectApk(file, path, isCancelled)
+                ApkInspector().inspect(file, path, isCancelled)
             }
             validateIdentity(entries)
             if (toc != null) verifyTocMetadata(toc, entries)
@@ -87,28 +86,6 @@ class ArchivePreparer {
         }
     }
     private fun isRawApk(source: File): Boolean = openCheckedZip(source).use { zip -> zip.getEntry("AndroidManifest.xml") != null }
-    private fun inspectApk(file: File, archivePath: String, isCancelled: () -> Boolean): ApkEntry {
-        openCheckedZip(file).use { zip ->
-            val entries = checkedZipEntries(zip)
-            if (entries.any { it.name == "apex_manifest.pb" || it.name == "apex_payload.img" })
-                throw PreparationException("APEX не поддерживается установщиком APK")
-            val manifest = entries.singleOrNull { it.name == "AndroidManifest.xml" && !it.isDirectory }
-                ?: throw PreparationException("APK без AndroidManifest.xml: $archivePath")
-            if (manifest.size > MAX_METADATA_BYTES) throw PreparationException("Манифест превышает 4 МиБ")
-            val bytes = zip.getInputStream(manifest).use { readMetadata(it, isCancelled) }
-            val crc = CRC32().apply { update(bytes) }
-            if (manifest.crc >= 0 && crc.value != manifest.crc) throw PreparationException("Повреждённый AndroidManifest.xml")
-            val metadata = BinaryManifestReader().read(bytes)
-            val abis = entries.mapNotNull { entry ->
-                if (!entry.isDirectory && entry.name.startsWith("lib/") && entry.name.endsWith(".so")) {
-                    val parts = entry.name.split('/')
-                    if (parts.size != 3 || parts[1] !in knownAbis) throw PreparationException("Неизвестная нативная ABI в APK")
-                    parts[1]
-                } else null
-            }.toSet()
-            return ApkEntry(file, archivePath, metadata, file.length(), abis)
-        }
-    }
     private fun verifyTocMetadata(toc: TocSelection, entries: List<ApkEntry>) {
         val base = entries.single { it.metadata.splitName == null }.metadata
         if (toc.packageName != null && toc.packageName != base.packageName) throw PreparationException("Имя пакета в toc.pb не совпадает с APK")

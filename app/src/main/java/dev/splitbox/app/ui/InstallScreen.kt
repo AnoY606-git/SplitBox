@@ -85,6 +85,7 @@ fun InstallScreen(
     settings: AppSettings,
     access: AccessState,
     onChooseFile: () -> Unit,
+    onChooseApks: () -> Unit = onChooseFile,
     onInstall: () -> Unit,
     onCancel: () -> Unit,
     onReset: () -> Unit,
@@ -134,7 +135,7 @@ fun InstallScreen(
                 }
             }
             if (ui.phase == OperationPhase.IDLE) {
-                item("picker") { FilePickerCard(onChooseFile) }
+                item("picker") { FilePickerCard(onChooseFile, onChooseApks) }
                 item("steps") { HowItWorks() }
             } else if (busy) {
                 item("progress") { OperationPanel(ui, onCancel) }
@@ -246,7 +247,7 @@ fun InstallScreen(
                     }
                 }
             } else if (ui.phase == OperationPhase.READY) {
-                item("choose_again") { FilePickerCard(onChooseFile) }
+                item("choose_again") { FilePickerCard(onChooseFile, onChooseApks) }
             }
             item("privacy") {
                 Row(Modifier.fillMaxWidth().padding(top = 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -301,22 +302,27 @@ private fun InstallHero() {
 }
 
 @Composable
-private fun FilePickerCard(onChooseFile: () -> Unit) {
-    Surface(onClick = onChooseFile, shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.primaryContainer) {
-        Column(Modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(52.dp).background(MaterialTheme.colorScheme.primary, RoundedCornerShape(16.dp)), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Rounded.FileOpen, null, Modifier.size(26.dp), tint = MaterialTheme.colorScheme.onPrimary)
+private fun FilePickerCard(onChooseFile: () -> Unit, onChooseApks: () -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Surface(onClick = onChooseFile, shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.primaryContainer) {
+            Column(Modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(52.dp).background(MaterialTheme.colorScheme.primary, RoundedCornerShape(16.dp)), contentAlignment = Alignment.Center) {
+                        Icon(Icons.Rounded.FileOpen, null, Modifier.size(26.dp), tint = MaterialTheme.colorScheme.onPrimary)
+                    }
+                    Spacer(Modifier.weight(1f))
+                    Icon(Icons.AutoMirrored.Rounded.ArrowForward, null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
                 }
-                Spacer(Modifier.weight(1f))
-                Icon(Icons.AutoMirrored.Rounded.ArrowForward, null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
-            }
-            Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                Text("Выбрать файл", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                Text("APK · APKS · XAPK · APKM · ZIP", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                Text("Откроется системный проводник", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = .75f))
+                Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                    Text("Выбрать файл", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                    Text("APK · APKS · XAPK · APKM · ZIP", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                    Text("Откроется системный проводник", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = .75f))
+                }
             }
         }
+        FilledTonalButton(onClick = onChooseApks, modifier = Modifier.fillMaxWidth()) { Text("Выбрать несколько APK") }
+        Text("Все APK должны относиться к одному приложению", modifier = Modifier.padding(horizontal = 12.dp),
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 

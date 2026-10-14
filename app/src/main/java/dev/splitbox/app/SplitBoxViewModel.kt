@@ -203,13 +203,25 @@ class SplitBoxViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun importUri(uri: Uri) {
+        if (uri.scheme != "content" && uri.scheme != "file") { message("Поддерживаются только content/file URI"); return }
+        startImport(listOf(uri))
+    }
+
+    fun importUris(uris: List<Uri>) {
+        if (uris.isEmpty()) return
+        val normalized = try { ImportSelection.normalize(uris.map(Uri::toString)) }
+        catch (e: IllegalArgumentException) { message(e.message ?: "Некорректный выбор файлов"); return }
+        if (normalized.size == 1) importUri(Uri.parse(normalized.single()))
+        else startImport(normalized.map(Uri::parse))
+    }
+
+    private fun startImport(uris: List<Uri>) {
         if (!bootstrapSuccessful) {
-            lifecycleRecovery.deferImport(bootstrap::await, { importUri(uri) }) {
+            lifecycleRecovery.deferImport(bootstrap::await, { startImport(uris) }) {
                 message("Журнал установки недоступен: ${it.message}")
             }
             return
         }
-        if (uri.scheme != "content" && uri.scheme != "file") { message("Поддерживаются только content/file URI"); return }
         val handoff = lifecycleRecovery.preemptForImport(operation?.isActive == true, journal.read())
         if (handoff == null) { message("Дождитесь завершения текущей операции или отмените её"); return }
         cleanupRetry.discard()
@@ -229,26 +241,24 @@ class SplitBoxViewModel(application: Application) : AndroidViewModel(application
                 journal.flush()
                 val old = activeDirectory
                 withContext(Dispatchers.IO) { old?.let { stager.delete(it) } }
-                val name = withContext(Dispatchers.IO) { stager.name(uri) }
                 val workDirectory = withContext(Dispatchers.IO) { stager.newDirectory() }
                 directory = workDirectory
                 activeDirectory = workDirectory
-                val source = File(workDirectory, "source.bin")
-                currentSource = source
+                currentSource = null
                 val job = currentCoroutineContext().job
-                val sourceBytes = withContext(Dispatchers.IO) { stager.sourceSize(uri) }
-                mutableUi.update { it.copy(sourceBytes = sourceBytes) }
-                val copied = withContext(Dispatchers.IO) {
-                    stager.copy(uri, source, options.maxExpandedGiB.toLong() * 1024 * 1024 * 1024,
-                        { !job.isActive }, { bytes -> mutableUi.update { it.copy(copiedBytes = bytes,
-                            detail = "Скопировано ${bytes / (1024 * 1024)} МиБ") } }, options.computeSha256)
-                }
-                mutableUi.update { it.copy(phase = OperationPhase.ANALYZING, title = "Проверка пакета", detail = name) }
-                val prepared = withContext(Dispatchers.IO) {
-                    ArchivePreparer().prepare(source, name, workDirectory, device(),
+                val imported = withContext(Dispatchers.IO) {
+                    PackageImporter(stager).prepare(uris, workDirectory, device(),
                         PrepareOptions(options.maxExpandedGiB.toLong() * 1024 * 1024 * 1024, options.autoSelectSplits),
-                        { detail, progress -> mutableUi.update { it.copy(detail = detail, progress = progress) } }, { !job.isActive })
+                        options.computeSha256, { !job.isActive },
+                        { total, bytes -> mutableUi.update { it.copy(sourceBytes = total, copiedBytes = bytes,
+                            progress = total?.takeIf { it > 0 }?.let { bytes.toFloat() / it },
+                            detail = "Скопировано ${bytes / (1024 * 1024)} МиБ") } },
+                        { detail, progress -> mutableUi.update { it.copy(phase = OperationPhase.ANALYZING,
+                            title = "Проверка пакета", detail = detail, progress = progress) } })
                 }
+                currentSource = imported.source
+                val prepared = imported.prepared
+                val name = prepared.sourceName
                 val checked = withContext(Dispatchers.IO) {
                     check(prepared.apks.size in 1..4096) { "Недопустимое количество APK" }
                     if (options.verifySignatures) {
@@ -258,7 +268,7 @@ class SplitBoxViewModel(application: Application) : AndroidViewModel(application
                     if (options.verifySignatures) prepared else prepared.copy(warnings = prepared.warnings +
                         "Криптографическая проверка в SplitBox отключена. Android проверит подписи при установке.")
                 }
-                val sha = copied.sha256
+                val sha = imported.sha256
                 val label = withContext(Dispatchers.IO) { appLabel(checked) }
                 val selected = checked.apks.filter { it.selected }.map { it.archivePath }.toSet()
                 withContext(Dispatchers.IO) {
@@ -331,7 +341,7 @@ class SplitBoxViewModel(application: Application) : AndroidViewModel(application
                 archivePrivilegedRecord()
                 journal.clearPreparedDirectory()
                 if (options.backend == BackendMode.SYSTEM && !context.packageManager.canRequestPackageInstalls()) {
-                    val source = currentSource ?: File(prepared.workDir, "source.bin")
+                    val source = currentSource ?: prepared.apks.single { it.metadata.splitName == null }.file
                     journal.saveAwaitingPermission(source.absolutePath, prepared.sourceName, prepared.workDir.absolutePath)
                     journal.flush()
                     mutableUi.update { it.copy(phase = OperationPhase.WAITING_USER, title = "Требуется разрешение", canCancel = true,
@@ -542,7 +552,7 @@ class SplitBoxViewModel(application: Application) : AndroidViewModel(application
     }
     private fun applyRestored(value: PreparedSnapshot.Restored) {
         activeDirectory = value.prepared.workDir
-        currentSource = File(value.prepared.workDir, "source.bin")
+        currentSource = null
         mutableUi.value = UiState(OperationPhase.READY, "Подготовленный пакет восстановлен", value.prepared.sourceName,
             prepared = value.prepared, selectedPaths = value.selected, sha256 = value.sha256, appLabel = value.label)
         checkpointOwner = value.prepared.workDir.absolutePath

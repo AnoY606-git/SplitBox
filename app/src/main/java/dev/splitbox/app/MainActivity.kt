@@ -28,6 +28,10 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private val openApks = registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        viewModel.importUris(uris)
+    }
+
     private val createObbArchive = registerForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
         uri?.let(viewModel::exportObb)
     }
@@ -40,6 +44,7 @@ class MainActivity : ComponentActivity() {
                 viewModel = viewModel,
                 window = window,
                 onChooseFile = ::chooseFile,
+                onChooseApks = ::chooseApks,
                 onExportObb = ::chooseObbDestination,
                 onRetrySave = viewModel::retrySelectionSave,
                 onLaunchIntent = { startActivity(it) },
@@ -69,6 +74,16 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun chooseApks() {
+        try {
+            openApks.launch(arrayOf("*/*"))
+        } catch (_: ActivityNotFoundException) {
+            viewModel.reportMessage("На устройстве нет системного выбора файлов. Передайте APK одного приложения из файлового менеджера в SplitBox.", NoticeAction.CHOOSE_FILE)
+        } catch (_: SecurityException) {
+            viewModel.reportMessage("Android запретил открыть выбор файлов. Передайте APK одного приложения из файлового менеджера в SplitBox.", NoticeAction.CHOOSE_FILE)
+        }
+    }
+
     private fun chooseObbDestination(name: String) {
         try {
             createObbArchive.launch(name)
@@ -80,6 +95,14 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun importFromIntent(intent: Intent?) {
+        if (intent?.action == Intent.ACTION_SEND_MULTIPLE) {
+            val streams = intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM, Uri::class.java).orEmpty()
+            val uris = streams.ifEmpty {
+                intent.clipData?.let { clip -> (0 until clip.itemCount).mapNotNull { clip.getItemAt(it).uri } }.orEmpty()
+            }
+            viewModel.importUris(uris)
+            return
+        }
         val uri: Uri? = when (intent?.action) {
             Intent.ACTION_VIEW -> intent.data
             Intent.ACTION_SEND -> intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)

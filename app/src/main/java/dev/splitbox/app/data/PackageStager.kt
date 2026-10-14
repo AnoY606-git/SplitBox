@@ -9,6 +9,7 @@ import dev.splitbox.core.ApkEntry
 import java.io.File
 import java.io.FileInputStream
 import java.io.IOException
+import java.io.InputStream
 import java.security.MessageDigest
 import java.util.UUID
 import com.android.apksig.ApkVerifier
@@ -37,6 +38,15 @@ class PackageStager(private val context: Context) {
             }
         }.getOrNull()
     }
+    fun openSource(uri: Uri): InputStream {
+        require(uri.scheme == "content" || uri.scheme == "file") { "Поддерживаются только content/file URI" }
+        return try {
+            if (uri.scheme == "file") FileInputStream(File(requireNotNull(uri.path) { "В файловом URI отсутствует путь" }))
+            else context.contentResolver.openInputStream(uri) ?: throw IOException("Источник не открыл файл")
+        } catch (e: SecurityException) {
+            throw IOException("Доступ к URI истёк или не разрешён. Выберите файл заново через системный диалог.", e)
+        }
+    }
     // Сохраняет исходный вызов с progress в trailing lambda.
     fun copy(uri: Uri, destination: File, maxBytes: Long, cancelled: () -> Boolean,
         progress: (Long) -> Unit): SourceCopyResult = copy(uri, destination, maxBytes, cancelled, progress, false)
@@ -44,8 +54,7 @@ class PackageStager(private val context: Context) {
         computeSha256: Boolean = false): SourceCopyResult {
         require(uri.scheme == "content" || uri.scheme == "file") { "Поддерживаются только content/file URI" }
         try {
-            val source = if (uri.scheme == "file") FileInputStream(File(requireNotNull(uri.path) { "В файловом URI отсутствует путь" }))
-                else context.contentResolver.openInputStream(uri) ?: throw IOException("Источник не открыл файл")
+            val source = openSource(uri)
             return source.use { input -> destination.outputStream().use { output ->
                 val result = SourceCopier.copy(input, output, maxBytes, computeSha256, cancelled, progress)
                 output.fd.sync()

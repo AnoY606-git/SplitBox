@@ -80,6 +80,7 @@ fun SplitBoxApp(
     viewModel: SplitBoxViewModel,
     window: Window,
     onChooseFile: () -> Unit,
+    onChooseApks: () -> Unit,
     onExportObb: (String) -> Unit,
     onLaunchIntent: (Intent) -> Unit,
     onRetrySave: () -> Unit = {},
@@ -188,6 +189,7 @@ fun SplitBoxApp(
                         Destination.INSTALL -> InstallScreen(
                             ui = ui, settings = settings, access = access,
                             onChooseFile = { act(onChooseFile) },
+                            onChooseApks = { act(onChooseApks) },
                             onInstall = { act(viewModel::install) },
                             onCancel = viewModel::cancelOperation,
                             onReset = viewModel::reset,
