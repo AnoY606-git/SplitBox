@@ -103,7 +103,7 @@ private fun PackageInspectorDialog(prepared: PreparedPackage, selected: Set<Stri
                             })
                         }
                     }
-                    items(visiblePermissions, key = { it.name }) { group ->
+                    items(visiblePermissions, key = { "permission:${it.name}" }) { group ->
                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             SelectionContainer { Text(group.name, style = MaterialTheme.typography.bodyMedium) }
                             Text(group.declarations.joinToString("; ") { permissionSdkRange(it) },
