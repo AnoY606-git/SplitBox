@@ -6,6 +6,7 @@ import android.app.Application
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import androidx.core.net.toUri
 import android.os.Build
 import android.os.Process
 import android.provider.Settings
@@ -211,7 +212,7 @@ class SplitBoxViewModel(application: Application) : AndroidViewModel(application
         if (uris.isEmpty()) return
         val normalized = try { ImportSelection.normalize(uris.map(Uri::toString)) }
         catch (e: IllegalArgumentException) { message(e.message ?: "Некорректный выбор файлов"); return }
-        if (normalized.size == 1) importUri(Uri.parse(normalized.single()))
+        if (normalized.size == 1) importUri(normalized.single().toUri())
         else startImport(normalized.map(Uri::parse))
     }
 

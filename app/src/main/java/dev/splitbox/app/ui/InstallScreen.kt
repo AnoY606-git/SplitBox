@@ -92,7 +92,6 @@ fun InstallScreen(
     settings: AppSettings,
     access: AccessState,
     onChooseFile: () -> Unit,
-    onChooseApks: () -> Unit = onChooseFile,
     onInstall: () -> Unit,
     onCancel: () -> Unit,
     onReset: () -> Unit,
@@ -102,6 +101,7 @@ fun InstallScreen(
     onSettings: () -> Unit,
     onCheckStatus: () -> Unit,
     modifier: Modifier = Modifier,
+    onChooseApks: () -> Unit = onChooseFile,
     onRetrySave: () -> Unit = {},
     installedPackageReader: InstalledPackageReader? = null,
 ) {
