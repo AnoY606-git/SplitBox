@@ -26,7 +26,7 @@ internal object PermissionSnapshot {
             check(name.isNotBlank())
             val minSdk = exactInt(entry.get("minSdk"))
             val maxSdk = if (entry.isNull("maxSdk")) null else exactInt(entry.get("maxSdk"))
-            check(minSdk >= 1 && (maxSdk == null || maxSdk >= 1))
+            check(minSdk >= 1) // maxSdk хранит исходный signed Int из декларации, включая 0 и отрицательные.
             PermissionDeclaration(name, minSdk, maxSdk)
         }.distinct()
     }.getOrNull()

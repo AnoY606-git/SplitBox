@@ -145,7 +145,7 @@ class BinaryManifestReader {
                         val name = text("name")?.takeIf { it.isNotBlank() }
                             ?: fail("Элемент $element без атрибута android:name")
                         val maxSdk = integer("maxSdkVersion")
-                        if (maxSdk != null && maxSdk < 1) fail("Некорректный maxSdkVersion разрешения")
+                        // Android принимает signed Int, включая 0 и отрицательные; сохраняем декларацию без вывода о применимости.
                         permissions += PermissionDeclaration(name, if (element == "uses-permission") 1 else 23, maxSdk)
                     }
                     "uses-split" -> if (stack.lastOrNull() == "manifest") {

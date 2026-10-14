@@ -23,6 +23,19 @@ class ManifestPermissionsTest {
             ), declarations!!.toSet())
         }
     }
+    @Test fun nonPositiveMaxSdkDeclarationsRemainReadableAsSignedIntegers() {
+        for (maxSdk in listOf(0, -1, Int.MIN_VALUE)) {
+            for (tag in listOf("uses-permission", "uses-permission-sdk-23", "uses-permission-sdk-m")) {
+                val metadata = BinaryManifestReader().read(CoreFixtures.manifest(permissions = listOf(
+                    CoreFixtures.Permission("android.permission.CAMERA", tag, maxSdk),
+                )))
+                assertEquals(listOf(PermissionDeclaration("android.permission.CAMERA",
+                    minSdk = if (tag == "uses-permission") 1 else 23, maxSdk = maxSdk)), metadata.requestedPermissions)
+                assertEquals("dev.test", metadata.packageName)
+                assertEquals(7L, metadata.versionCode)
+            }
+        }
+    }
     @Test fun newlyReadManifestWithNoDeclarationsIsKnownEmptyButOldMetadataIsUnknown() {
         assertEquals(emptyList<PermissionDeclaration>(), BinaryManifestReader().read(CoreFixtures.manifest()).requestedPermissions)
         assertNull(ApkMetadata("dev.test", 7, "1.7", 23, 36).requestedPermissions)

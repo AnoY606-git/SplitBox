@@ -138,6 +138,8 @@ internal fun versionDescription(version: PackageVersion): String =
     "${version.name.ifBlank { "Без названия версии" }} · код ${version.code}"
 
 internal fun permissionSdkRange(permission: PermissionDeclaration): String = when {
+    permission.maxSdk?.let { it <= 0 } == true ->
+        "В декларации: SDK от ${permission.minSdk}, maxSdkVersion=${permission.maxSdk}. Применимость определяет Android"
     permission.maxSdk != null -> "SDK ${permission.minSdk}–${permission.maxSdk}"
     permission.minSdk > 1 -> "SDK от ${permission.minSdk}"
     else -> "Без ограничений SDK в декларации"
