@@ -12,8 +12,14 @@ internal enum class SplitGroupKind(val title: String) {
 }
 internal data class SplitGroup(val kind: SplitGroupKind, val entries: List<ApkEntry>)
 /** Только представление: классификация не меняет выбор и не заменяет проверку ядра. */
-internal fun groupSplits(entries: List<ApkEntry>, selectedPaths: Set<String>, selectedOnly: Boolean): List<SplitGroup> {
-    val visible = entries.filter { !selectedOnly || it.locked || it.archivePath in selectedPaths }
+internal fun groupSplits(entries: List<ApkEntry>, selectedPaths: Set<String>, selectedOnly: Boolean, query: String = ""): List<SplitGroup> {
+    val term = query.trim()
+    val visible = entries.filter { entry ->
+        (!selectedOnly || entry.locked || entry.archivePath in selectedPaths) &&
+            (term.isEmpty() || entry.archivePath.contains(term, ignoreCase = true) ||
+                entry.metadata.splitName.orEmpty().contains(term, ignoreCase = true) ||
+                splitGroupKind(entry).title.contains(term, ignoreCase = true))
+    }
     val groups = visible.groupBy(::splitGroupKind)
     return SplitGroupKind.entries.mapNotNull { kind -> groups[kind]?.let { SplitGroup(kind, it) } }
 }

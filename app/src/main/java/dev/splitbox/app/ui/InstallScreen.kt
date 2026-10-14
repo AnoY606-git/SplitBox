@@ -22,6 +22,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Android
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.CloudOff
@@ -42,6 +44,8 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -99,9 +103,18 @@ fun InstallScreen(
 ) {
     val busy = ui.phase.isBusy()
     val prepared = ui.prepared
+    val workDir = prepared?.workDir?.absolutePath
+    var filtersWorkDir by rememberSaveable { mutableStateOf(workDir) }
     var selectedOnly by rememberSaveable { mutableStateOf(false) }
-    val groups = remember(prepared, ui.selectedPaths, selectedOnly) {
-        groupSplits(prepared?.apks.orEmpty(), ui.selectedPaths, selectedOnly)
+    var query by rememberSaveable { mutableStateOf("") }
+    // Сохраняем ключ вместе с фильтрами: новый пакет мог появиться на другой вкладке.
+    if (filtersWorkDir != workDir) {
+        filtersWorkDir = workDir
+        selectedOnly = false
+        query = ""
+    }
+    val groups = remember(prepared, ui.selectedPaths, selectedOnly, query) {
+        groupSplits(prepared?.apks.orEmpty(), ui.selectedPaths, selectedOnly, query)
     }
     val selectedEntries = remember(prepared, ui.selectedPaths) {
         prepared?.apks.orEmpty().filter { it.archivePath in ui.selectedPaths }
@@ -114,6 +127,9 @@ fun InstallScreen(
         ) {
             if (ui.phase == OperationPhase.IDLE && prepared == null) {
                 item("hero") { InstallHero() }
+            }
+            if (ui.phase == OperationPhase.IDLE) {
+                item("picker") { FilePickerCard(onChooseFile, onChooseApks) }
             }
             item("backend") {
                 Surface(onClick = onSettings, shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceContainerLow) {
@@ -135,7 +151,6 @@ fun InstallScreen(
                 }
             }
             if (ui.phase == OperationPhase.IDLE) {
-                item("picker") { FilePickerCard(onChooseFile, onChooseApks) }
                 item("steps") { HowItWorks() }
             } else if (busy) {
                 item("progress") { OperationPanel(ui, onCancel) }
@@ -233,9 +248,31 @@ fun InstallScreen(
                     SectionHeading("Части приложения", "Базовый APK и обязательные модули защищены. Совместимые дополнительные части можно отключить.")
                 }
                 item("split_filter") {
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = query, onValueChange = { query = it },
+                            modifier = Modifier.fillMaxWidth(), singleLine = true,
+                            label = { Text("Найти часть приложения") },
+                            leadingIcon = { Icon(Icons.Rounded.Search, null) },
+                            trailingIcon = {
+                                if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(Icons.Rounded.Close, "Очистить поиск") }
+                            },
+                            shape = MaterialTheme.shapes.large,
+                        )
                         FilterChip(selected = selectedOnly, onClick = { selectedOnly = !selectedOnly }, label = { Text("Только выбранные") })
-                        if (selectedOnly) Text("Обязательные и заблокированные части также показаны.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        if (selectedOnly) Text("Обязательные и заблокированные части показаны, если совпадают с поиском.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Показано ${groups.sumOf { it.entries.size }} из ${prepared.apks.size}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        if (query.isNotEmpty() || selectedOnly) {
+                            TextButton(onClick = { query = ""; selectedOnly = false }) { Text("Сбросить фильтры") }
+                        }
+                    }
+                }
+                if (groups.isEmpty()) {
+                    item("split_empty") {
+                        Panel(Modifier.fillMaxWidth()) {
+                            Text("Подходящих частей нет", style = MaterialTheme.typography.titleMedium)
+                            Text("Измените запрос или сбросьте фильтры. Выбор частей для установки сохранён.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                     }
                 }
                 groups.forEach { group ->
@@ -288,15 +325,14 @@ fun InstallScreen(
 private fun InstallHero() {
     Surface(shape = RoundedCornerShape(28.dp), color = MaterialTheme.colorScheme.surfaceContainer) {
         Column(
-            Modifier.fillMaxWidth().background(Brush.linearGradient(listOf(MaterialTheme.colorScheme.primaryContainer.copy(alpha = .62f), MaterialTheme.colorScheme.surfaceContainer))).padding(22.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            Modifier.fillMaxWidth().background(Brush.linearGradient(listOf(MaterialTheme.colorScheme.primaryContainer.copy(alpha = .62f), MaterialTheme.colorScheme.surfaceContainer))).padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Eyebrow("ВСЁ ПО ЧАСТЯМ", Modifier.weight(1f))
-                SplitBoxMark(Modifier.size(66.dp), expanded = true)
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("APK и части приложения", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
+                SplitBoxMark(Modifier.size(36.dp), expanded = true)
             }
-            Text("Один файл.\nВсе возможности.", style = MaterialTheme.typography.headlineLarge)
-            Text("Устанавливайте APK и архивы с частями приложения с понятным контролем над каждой частью.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Выберите файл и проверьте состав перед установкой.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

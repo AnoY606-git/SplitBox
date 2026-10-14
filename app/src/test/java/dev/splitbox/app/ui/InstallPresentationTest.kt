@@ -45,6 +45,31 @@ class InstallPresentationTest {
         assertEquals(listOf(SplitGroupKind.FEATURE, SplitGroupKind.ABI, SplitGroupKind.DENSITY, SplitGroupKind.LANGUAGE), groups.map { it.kind })
     }
 
+    @Test fun searchIntersectsVisibleSelectionWithoutChangingSelectionOrOrder() {
+        val base = entry(null, locked = true)
+        val lockedAbi = entry("config.x86", locked = true)
+        val ru = entry("config.ru")
+        val en = entry("config.en")
+        val selected = linkedSetOf(base.archivePath, ru.archivePath)
+        val entries = listOf(en, ru, lockedAbi, base)
+        val matches = groupSplits(entries, selected, selectedOnly = true, query = "  CONFIG.  ")
+        assertEquals(listOf("config.x86", "config.ru"), matches.flatMap { it.entries }.map { it.archivePath })
+        assertEquals(setOf("base.apk", "config.ru"), selected)
+        assertEquals(listOf("config.en", "config.ru", "config.x86", "base.apk"), entries.map { it.archivePath })
+        assertTrue(groupSplits(entries, selected, true, "missing").isEmpty())
+        assertEquals(groupSplits(entries, selected, true), groupSplits(entries, selected, true, "   "))
+    }
+
+    @Test fun searchUsesArchivePathSplitNameAndGroupTitleCaseInsensitively() {
+        val ru = entry("config.ru").copy(archivePath = "splits/locale.apk")
+        val en = entry("config.en")
+        val abi = entry("config.arm64_v8a")
+        val entries = listOf(en, ru, abi)
+        assertEquals(listOf(ru), groupSplits(entries, emptySet(), false, " LOCALE ").flatMap { it.entries })
+        assertEquals(listOf(ru), groupSplits(entries, emptySet(), false, "CONFIG.RU").flatMap { it.entries })
+        assertEquals(listOf(en, ru), groupSplits(entries, emptySet(), false, " ЯЗЫКИ ").flatMap { it.entries })
+    }
+
     @Test fun installationRequiresDurableCurrentValidNonemptySelection() {
         val base = entry(null, locked = true)
         val prepared = PreparedPackage("test.apk", base.metadata, listOf(base), emptyList(), emptyList(), File("unused"))
