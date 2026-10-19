@@ -144,14 +144,14 @@ fun InstallScreen(
                             Text("Способ установки", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
                             Icon(Icons.Rounded.ChevronRight, "Изменить способ установки")
                         }
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             StatusPill(settings.backend.displayName(), Icons.Rounded.Shield)
                             val status = when (settings.backend) {
                                 BackendMode.SYSTEM -> "Подтверждение через Android"
                                 BackendMode.ROOT -> access.rootStatus
                                 BackendMode.SHIZUKU -> access.shizukuStatus
                             }
-                            Text(status, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(status, Modifier.fillMaxWidth(), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
