@@ -5,6 +5,7 @@ package dev.splitbox.core
 import java.io.File
 import java.io.IOException
 import java.nio.file.Files
+import java.util.concurrent.CancellationException
 
 class ArchivePreparer {
     fun prepare(source: File, sourceName: String, workDir: File, device: DeviceProfile,
@@ -25,7 +26,7 @@ class ArchivePreparer {
             checkCancelled(isCancelled)
             val budget = ByteBudget(options.maxExpandedBytes)
             onProgress("Анализ архива", null)
-            val files: Map<String, File> = if (extension == "apk" || isRawApk(source)) {
+            val files: Map<String, File> = if (extension == "apk" || isRawApk(source, isCancelled)) {
                 // source.bin уже скопирован в закрытый workDir. Сохраняем его для восстановления,
                 // используя тот же файл в установке вместо второй полной копии APK.
                 val ownedSource = source.name == "source.bin" && !Files.isSymbolicLink(source.toPath()) &&
@@ -79,13 +80,14 @@ class ArchivePreparer {
         } catch (e: Exception) {
             outputDir.deleteRecursively()
             when (e) {
+                is CancellationException -> throw e
                 is PreparationException -> throw e
                 is IOException -> throw PreparationException("Не удалось прочитать APK/ZIP: ${e.message.orEmpty().take(200)}")
                 else -> throw PreparationException("Не удалось подготовить пакет: ${e.message.orEmpty().take(200)}")
             }
         }
     }
-    private fun isRawApk(source: File): Boolean = openCheckedZip(source).use { zip -> zip.getEntry("AndroidManifest.xml") != null }
+    private fun isRawApk(source: File, isCancelled: () -> Boolean): Boolean = openCheckedZip(source, isCancelled).use { zip -> zip.getEntry("AndroidManifest.xml") != null }
     private fun verifyTocMetadata(toc: TocSelection, entries: List<ApkEntry>) {
         val base = entries.single { it.metadata.splitName == null }.metadata
         if (toc.packageName != null && toc.packageName != base.packageName) throw PreparationException("Имя пакета в toc.pb не совпадает с APK")

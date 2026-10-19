@@ -5,17 +5,14 @@ package dev.splitbox.core
 import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
-import java.io.RandomAccessFile
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
+import java.util.concurrent.CancellationException
 import java.util.zip.CRC32
 import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
 
 internal const val MAX_METADATA_BYTES = 4 * 1024 * 1024
-internal const val MAX_ZIP_ENTRIES = 4096
 internal fun checkCancelled(isCancelled: () -> Boolean) {
-    if (isCancelled() || Thread.currentThread().isInterrupted) throw PreparationException("Операция отменена")
+    if (isCancelled() || Thread.currentThread().isInterrupted) throw CancellationException("Операция отменена")
 }
 
 /** Проверяем имена всех записей ZIP, включая не-APK. Имена файлов не передаются в оболочку. */
@@ -30,40 +27,12 @@ internal fun safeArchivePath(name: String, directory: Boolean = false): String {
     return clean
 }
 
-/** Проверяем ограничения EOCD до выделения памяти под индекс центрального каталога ZipFile. */
-internal fun openCheckedZip(file: File): ZipFile {
-    RandomAccessFile(file, "r").use { input ->
-        val length = input.length()
-        if (length < 22) throw PreparationException("Повреждённый ZIP: отсутствует центральный каталог")
-        val tailSize = minOf(length, 65557L).toInt()
-        val tail = ByteArray(tailSize)
-        input.seek(length - tailSize); input.readFully(tail)
-        val bytes = ByteBuffer.wrap(tail).order(ByteOrder.LITTLE_ENDIAN)
-        fun ushort(at: Int) = bytes.getShort(at).toInt() and 65535
-        var end = -1
-        for (index in tailSize - 22 downTo 0) {
-            if (bytes.getInt(index) == 0x06054b50 && index + 22 + ushort(index + 20) == tailSize) { end = index; break }
-        }
-        if (end < 0) throw PreparationException("Повреждённый ZIP: отсутствует EOCD")
-        val entries = ushort(end + 10)
-        val size = bytes.getInt(end + 12).toLong() and 0xffffffffL
-        val offset = bytes.getInt(end + 16).toLong() and 0xffffffffL
-        if (entries == 65535 || ushort(end + 8) == 65535 || size == 0xffffffffL || offset == 0xffffffffL)
-            throw PreparationException("Центральный каталог ZIP64 не поддерживается")
-        if (ushort(end + 4) != 0 || ushort(end + 6) != 0 || ushort(end + 8) != entries)
-            throw PreparationException("Многотомный ZIP не поддерживается")
-        if (entries > MAX_ZIP_ENTRIES) throw PreparationException("ZIP содержит больше $MAX_ZIP_ENTRIES записей")
-        if (size > 32L * 1024 * 1024 || offset + size != length - tailSize + end)
-            throw PreparationException("Некорректный или слишком большой центральный каталог ZIP")
-    }
-    return ZipFile(file)
-}
-
-internal fun checkedZipEntries(zip: ZipFile): List<ZipEntry> {
+internal fun checkedZipEntries(zip: ZipFile, isCancelled: () -> Boolean = { false }): List<ZipEntry> {
     val entries = mutableListOf<ZipEntry>()
-    val seen = mutableMapOf<String, Boolean>()
+    val seen = java.util.TreeMap<String, Boolean>()
     val enumeration = zip.entries()
     while (enumeration.hasMoreElements()) {
+        checkCancelled(isCancelled)
         if (entries.size >= MAX_ZIP_ENTRIES) throw PreparationException("ZIP содержит больше $MAX_ZIP_ENTRIES записей")
         val entry = enumeration.nextElement()
         val path = safeArchivePath(entry.name, entry.isDirectory)
@@ -72,11 +41,13 @@ internal fun checkedZipEntries(zip: ZipFile): List<ZipEntry> {
             throw PreparationException("Неподдерживаемое сжатие или зашифрованный ZIP")
         entries += entry
     }
-    seen.forEach { (path, _) ->
-        var parent = path.substringBeforeLast('/', "")
-        while (parent.isNotEmpty()) {
-            if (seen[parent] == false) throw PreparationException("Конфликт файла и каталога ZIP: $parent")
-            parent = parent.substringBeforeLast('/', "")
+    seen.forEach { (path, directory) ->
+        checkCancelled(isCancelled)
+        if (!directory) {
+            // Поиск первого потомка не перебирает и не копирует все префиксы глубокого пути.
+            val prefix = "$path/"
+            if (seen.ceilingKey(prefix)?.startsWith(prefix) == true)
+                throw PreparationException("Конфликт файла и каталога ZIP: $path")
         }
     }
     return entries
@@ -85,8 +56,11 @@ internal fun checkedZipEntries(zip: ZipFile): List<ZipEntry> {
 internal class ByteBudget(private val maximum: Long) {
     var consumed: Long = 0; private set
     init { if (maximum <= 0) throw PreparationException("Лимит распаковки должен быть положительным") }
+    fun requireAvailable(count: Long) {
+        if (count < 0 || count > maximum - consumed) throw PreparationException("Превышен лимит распаковки ($maximum байт)")
+    }
     fun consume(count: Int) {
-        if (count.toLong() > maximum - consumed) throw PreparationException("Превышен лимит распаковки ($maximum байт)")
+        if (count < 0 || count.toLong() > maximum - consumed) throw PreparationException("Превышен лимит распаковки ($maximum байт)")
         consumed += count
     }
 }
@@ -96,13 +70,22 @@ internal fun copyBounded(input: InputStream, output: OutputStream, budget: ByteB
     onBytes: (Long) -> Unit = {}): Long {
     val buffer = ByteArray(64 * 1024)
     var bytes = 0L
+    var bytesUntilSpaceCheck = 0L
     while (true) {
         checkCancelled(isCancelled)
         val count = input.read(buffer)
         if (count < 0) break
         if (count == 0) continue
         budget.consume(count)
-        if (checkSpace != null && checkSpace.usableSpace < count.toLong()) throw PreparationException("Недостаточно свободного места")
+        if (checkSpace != null) {
+            // statvfs на каждом 64-КиБ блоке заметно замедляет многогигабайтную распаковку.
+            if (bytesUntilSpaceCheck < count) {
+                val available = checkSpace.usableSpace - PREPARATION_SPACE_RESERVE_BYTES
+                if (available < count) throw PreparationException("Недостаточно свободного места")
+                bytesUntilSpaceCheck = minOf(available, 4L * 1024 * 1024)
+            }
+            bytesUntilSpaceCheck -= count
+        }
         output.write(buffer, 0, count)
         crc?.update(buffer, 0, count)
         bytes += count
@@ -122,9 +105,11 @@ class SafeArchiveExtractor {
     internal fun extract(source: File, workDir: File, budget: ByteBudget,
         isCancelled: () -> Boolean, onProgress: (String, Float?) -> Unit): Map<String, File> {
         val result = linkedMapOf<String, File>()
-        openCheckedZip(source).use { zip ->
-            val entries = checkedZipEntries(zip)
+        openCheckedZip(source, isCancelled).use { zip ->
+            val entries = checkedZipEntries(zip, isCancelled)
             if (entries.isEmpty()) throw PreparationException("Архив пуст")
+            if (entries.count { !it.isDirectory && it.name.endsWith(".apk", true) } > MAX_PACKAGE_APKS)
+                throw PreparationException("Архив содержит больше $MAX_PACKAGE_APKS APK")
             entries.forEachIndexed { index, entry ->
                 checkCancelled(isCancelled)
                 val path = safeArchivePath(entry.name, entry.isDirectory)
@@ -134,6 +119,7 @@ class SafeArchiveExtractor {
                 if (entry.isDirectory) {
                     if (!destination.mkdirs() && !destination.isDirectory) throw PreparationException("Не удалось создать рабочий каталог")
                 } else {
+                    budget.requireAvailable(entry.size)
                     if (!destination.parentFile.mkdirs() && !destination.parentFile.isDirectory)
                         throw PreparationException("Не удалось создать рабочий каталог")
                     if (!destination.createNewFile()) throw PreparationException("Рабочий файл уже существует: $path")

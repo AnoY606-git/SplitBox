@@ -147,7 +147,7 @@ class BundleTocReader {
         val root = Proto.parse(bytes)
         val warnings = mutableListOf<String>()
         if (root.has(3) || root.has(6)) warnings += "Пакеты ресурсов не поддерживаются; игровые ресурсы из отдельных срезов не будут установлены."
-        if (root.repeated(1).size > MAX_ZIP_ENTRIES) throw PreparationException("Слишком много вариантов в toc.pb")
+        if (root.repeated(1).size > MAX_PACKAGE_APKS) throw PreparationException("Слишком много вариантов в toc.pb")
         var apkCount = 0
         val variants = root.messages(1).map { variant ->
             val modules = variant.messages(2).map { set ->
@@ -162,7 +162,7 @@ class BundleTocReader {
                 val installTime = delivery == 1L || delivery == 0L && metadata.integer(2) == 0L
                 TocModule(name, metadata.strings(4), moduleTargeting(metadata.message(5)), installTime,
                     metadata.integer(3) != 0L, set.messages(2).map { apk ->
-                        if (++apkCount > MAX_ZIP_ENTRIES) throw PreparationException("Слишком много APK в toc.pb")
+                        if (++apkCount > MAX_PACKAGE_APKS) throw PreparationException("Слишком много APK в toc.pb")
                         val path = safeArchivePath(apk.string(2))
                         if (!path.endsWith(".apk", true)) throw PreparationException("toc.pb ссылается на не-APK: $path")
                         val metadataKinds = (3..9).filter { apk.has(it) }

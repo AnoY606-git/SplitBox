@@ -6,7 +6,9 @@ import java.io.File
 import java.io.IOException
 
 data class DeviceProfile(val sdk: Int, val abis: List<String>, val densityDpi: Int, val locales: List<String>)
-data class PrepareOptions(val maxExpandedBytes: Long = 2L * 1024 * 1024 * 1024, val autoSelect: Boolean = true)
+const val PREPARATION_SPACE_RESERVE_BYTES = 64L * 1024 * 1024
+
+data class PrepareOptions(val maxExpandedBytes: Long = Long.MAX_VALUE, val autoSelect: Boolean = true)
 data class ApkMetadata(
     val packageName: String, val versionCode: Long, val versionName: String,
     val minSdk: Int, val targetSdk: Int,

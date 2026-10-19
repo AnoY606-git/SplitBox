@@ -29,16 +29,16 @@ class SecurityAndTargetingTest {
         val zip = CoreFixtures.zip(File(root, "collision.zip"), listOf("a" to byteArrayOf(1), "a/base.apk" to CoreFixtures.bytesApk()))
         reject { prepare(root, zip) }
     }
-    @Test fun rejectsTooManyZipEntries() = workspace { root ->
-        val zip = CoreFixtures.zip(File(root, "many.zip"), (0..4096).map { "entry$it" to byteArrayOf() })
-        reject { prepare(root, zip) }
-    }
     @Test fun cancellationDuringInflationRemovesOutputOnly() = workspace { root ->
         val stage = File(root, "stage").apply { mkdir() }
         val source = CoreFixtures.zip(File(stage, "source.bin"), listOf("payload" to ByteArray(512 * 1024)))
-        var checks = 0
-        reject { ArchivePreparer().prepare(source, "payload.xapk", stage, device, isCancelled = { ++checks > 5 }) }
-        assertTrue(source.exists()); assertFalse(File(stage, "prepared").exists()); assertTrue(checks > 5)
+        var observedPartialFile = false
+        assertThrows(java.util.concurrent.CancellationException::class.java) {
+            ArchivePreparer().prepare(source, "payload.xapk", stage, device, isCancelled = {
+                (File(stage, "prepared/payload").length() > 0).also { if (it) observedPartialFile = true }
+            })
+        }
+        assertTrue(source.exists()); assertFalse(File(stage, "prepared").exists()); assertTrue(observedPartialFile)
     }
     @Test fun supportsSourceInsideStagingAndNeverOverwritesExistingResult() = workspace { root ->
         val stage = File(root, "stage").apply { mkdir() }
@@ -157,13 +157,13 @@ class SecurityAndTargetingTest {
         assertEquals(320, chooseDensity(listOf(320, 65535), 420))
         assertEquals(65534, chooseDensity(listOf(320, 65534, 65535), 420))
     }
-    @Test fun zip64MarkerRejectedBeforeZipFileAllocatesCentralDirectory() = workspace { root ->
+    @Test fun zip64MarkerWithoutLocatorRejectedBeforeZipFileAllocatesCentralDirectory() = workspace { root ->
         val file = CoreFixtures.zip(File(root, "zip64.zip"), listOf("base.apk" to CoreFixtures.bytesApk()))
         val bytes = file.readBytes()
         bytes[bytes.size - 14] = 0xff.toByte(); bytes[bytes.size - 13] = 0xff.toByte()
         bytes[bytes.size - 12] = 0xff.toByte(); bytes[bytes.size - 11] = 0xff.toByte()
         file.writeBytes(bytes)
-        try { prepare(root, file); fail("Архив ZIP64 должен быть отклонён") } catch (e: PreparationException) {
+        try { prepare(root, file); fail("Неполный ZIP64 должен быть отклонён") } catch (e: PreparationException) {
             assertTrue(e.message.orEmpty().contains("ZIP64"))
         }
     }

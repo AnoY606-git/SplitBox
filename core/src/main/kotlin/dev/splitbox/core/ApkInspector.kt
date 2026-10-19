@@ -8,8 +8,8 @@ import java.util.zip.CRC32
 /** Общая безопасная инспекция APK из архива и прямого набора. */
 internal class ApkInspector {
     fun inspect(file: File, archivePath: String, isCancelled: () -> Boolean): ApkEntry {
-        openCheckedZip(file).use { zip ->
-            val entries = checkedZipEntries(zip)
+        openCheckedZip(file, isCancelled).use { zip ->
+            val entries = checkedZipEntries(zip, isCancelled)
             if (entries.any { it.name == "apex_manifest.pb" || it.name == "apex_payload.img" })
                 throw PreparationException("APEX не поддерживается установщиком APK")
             val manifest = entries.singleOrNull { it.name == "AndroidManifest.xml" && !it.isDirectory }

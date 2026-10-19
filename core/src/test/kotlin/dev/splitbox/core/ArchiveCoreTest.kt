@@ -40,7 +40,7 @@ class ArchiveCoreTest {
     }
     @Test fun cancellationStopsStreamingAndPreservesInput() = workspace { dir ->
         val zip = CoreFixtures.zip(File(dir, "cancel.zip"), listOf("base.apk" to CoreFixtures.bytesApk()))
-        rejected("отмен") { prepare(dir, zip, cancel = { true }) }; assertTrue(zip.exists())
+        assertThrows(java.util.concurrent.CancellationException::class.java) { prepare(dir, zip, cancel = { true }) }; assertTrue(zip.exists())
     }
     @Test fun readsBinaryManifestWithSplitDependenciesAndLongVersion() {
         val metadata = BinaryManifestReader().read(CoreFixtures.manifest(split = "camera", feature = true, uses = listOf("shared"), requiredTypes = "abi,density", splitTypes = "feature"))
