@@ -1,6 +1,6 @@
 # Путеводитель разработчика
 
-SplitBox 1.1 — Android-приложение с отдельным JVM-ядром. Для первой задачи достаточно собрать debug, пройти путь импорта собственного fixture и определить слой изменения по таблице ниже.
+SplitBox 1.1.1 — Android-приложение с отдельным JVM-ядром. Для первой задачи достаточно собрать debug, пройти путь импорта собственного fixture и определить слой изменения по таблице ниже.
 
 ## Порядок знакомства
 
@@ -25,6 +25,8 @@ SplitBox 1.1 — Android-приложение с отдельным JVM-ядро
 | Модели UI и настроек | [Models](../app/src/main/java/dev/splitbox/app/model/Models.kt) |
 | Копирование URI, подписи и staging | [PackageStager](../app/src/main/java/dev/splitbox/app/data/PackageStager.kt), [SourceCopier](../app/src/main/java/dev/splitbox/app/data/SourceCopier.kt) |
 | Импорт нескольких APK | [ImportSelection](../app/src/main/java/dev/splitbox/app/data/ImportSelection.kt), [MultiApkStager](../app/src/main/java/dev/splitbox/app/data/MultiApkStager.kt), [PackageImporter](../app/src/main/java/dev/splitbox/app/data/PackageImporter.kt), [StagedApkPreparer](../core/src/main/kotlin/dev/splitbox/core/StagedApkPreparer.kt) |
+| Большие файлы, дисковый бюджет и повтор до сессии | [PackageSizePolicy](../app/src/main/java/dev/splitbox/app/data/PackageSizePolicy.kt), [StoragePreflightRecovery](../app/src/main/java/dev/splitbox/app/data/StoragePreflightRecovery.kt), [TransferProgress](../app/src/main/java/dev/splitbox/app/installer/TransferProgress.kt) |
+| ZIP/ZIP64 и границы индекса | [ZipStructure](../core/src/main/kotlin/dev/splitbox/core/ZipStructure.kt), [SafeArchiveExtractor](../core/src/main/kotlin/dev/splitbox/core/SafeArchiveExtractor.kt) |
 | Индекс размера кэша | [CacheSizeIndex](../app/src/main/java/dev/splitbox/app/data/CacheSizeIndex.kt) |
 | Очередь сохранения и проверка выбора | [RevisionedSaveQueue](../app/src/main/java/dev/splitbox/app/data/RevisionedSaveQueue.kt), [SelectionValidator](../app/src/main/java/dev/splitbox/app/data/SelectionValidator.kt) |
 | Форматы архивов и совместимость | [ArchivePreparer](../core/src/main/kotlin/dev/splitbox/core/ArchivePreparer.kt), [SplitSelector](../core/src/main/kotlin/dev/splitbox/core/SplitSelector.kt) |
