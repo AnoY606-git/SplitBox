@@ -396,7 +396,20 @@ class SplitBoxViewModel(application: Application) : AndroidViewModel(application
                 }
             } catch (e: Exception) {
                 withContext(NonCancellable) {
-                    if (!backendStarted && tracker?.current == null && journal.read() == null &&
+                    if (e is InsufficientStorageException && !backendStarted && tracker?.current == null && journal.read() == null) {
+                        val recovered = recoverStoragePreflight(before, e,
+                            isOwned = { !backendStarted && tracker?.current == null && journal.read() == null &&
+                                mutableUi.value.prepared === prepared && mutableUi.value.selectedPaths == before.selectedPaths &&
+                                checkpointOwner == prepared.workDir.absolutePath },
+                            restorePointer = {
+                                journal.savePreparedDirectory(prepared.workDir.absolutePath)
+                                journal.clearAwaitingPermission()
+                            }, flushSelection = selectionWrites::flush, flushJournal = journal::flush)
+                        if (recovered != null) {
+                            mutableUi.value = recovered
+                            reportMessage(recovered.detail, if (recovered.selectionSaveError != null) NoticeAction.RETRY_SAVE else null)
+                        }
+                    } else if (!backendStarted && tracker?.current == null && journal.read() == null &&
                         (mutableUi.value.phase == OperationPhase.READY || mutableUi.value.phase == OperationPhase.WAITING_USER)) {
                         val restored = runCatching {
                             restoreReadyCheckpoint(

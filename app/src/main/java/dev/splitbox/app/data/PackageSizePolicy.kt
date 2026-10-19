@@ -5,6 +5,9 @@ package dev.splitbox.app.data
 import dev.splitbox.core.PREPARATION_SPACE_RESERVE_BYTES
 import java.io.IOException
 
+internal class InsufficientStorageException(required: Long, available: Long) : IOException(
+    "Недостаточно свободного места: требуется ещё $required байт и резерв 64 МиБ, доступно ${available.coerceAtLeast(0)} байт. Освободите место на устройстве.")
+
 /** Ноль означает автоматическое ограничение свободным местом, остальные значения — явный лимит. */
 object PackageSizePolicy {
     val choicesGiB = listOf(0, 1, 2, 4, 8, 16, 32, 64)
@@ -26,7 +29,7 @@ object PackageSizePolicy {
     fun requireSpace(required: Long, available: Long) {
         require(required >= 0) { "Размер не может быть отрицательным" }
         if (available < PREPARATION_SPACE_RESERVE_BYTES || required > available - PREPARATION_SPACE_RESERVE_BYTES) {
-            throw IOException("Недостаточно свободного места: требуется ещё $required байт и резерв 64 МиБ, доступно ${available.coerceAtLeast(0)} байт. Освободите место на устройстве.")
+            throw InsufficientStorageException(required, available)
         }
     }
 }

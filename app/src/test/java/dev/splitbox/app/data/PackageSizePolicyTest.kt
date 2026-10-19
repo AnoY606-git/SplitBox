@@ -27,6 +27,11 @@ class PackageSizePolicyTest {
         assertEquals(68_719_476_736L, PackageSizePolicy.maxBytes(64))
         assertThrows(IllegalArgumentException::class.java) { PackageSizePolicy.maxBytes(-1) }
     }
+    @Test fun insufficientSessionStorageHasRecoverableErrorType() {
+        assertThrows(InsufficientStorageException::class.java) {
+            PackageSizePolicy.requireSpace(9_663_676_417L, 1_073_741_824L)
+        }
+    }
     @Test fun fullDiskAndInsufficientSessionSpaceFailWithoutOverflow() {
         assertThrows(IOException::class.java) { PackageSizePolicy.copyBudget(Long.MAX_VALUE, 0) }
         assertThrows(IOException::class.java) { PackageSizePolicy.copyBudget(Long.MAX_VALUE, 67_108_864L) }
