@@ -47,10 +47,16 @@ object ObbPolicy {
         val dir = path.substringBeforeLast('/')
         val root = dir.substringBeforeLast('/')
         val temporary = "$dir/.splitbox-${java.util.UUID.randomUUID()}.tmp"
+        val requiredKiB = size / 1024L + (if (size % 1024L == 0L) 0L else 1L) +
+            dev.splitbox.core.PREPARATION_SPACE_RESERVE_BYTES / 1024L
+        // POSIX df выводит доступные КиБ четвёртым полем. Неизвестный остаток не считаем нулём или успехом.
+        val checkSpace = "set -- \$(df -Pk '$dir' | tail -n 1); " +
+            "case \"\$4\" in ''|*[!0-9]*) echo 'Error [SPACE_UNAVAILABLE]'; exit 1;; esac; " +
+            "[ \"\$4\" -ge $requiredKiB ] || { echo 'Error [INSUFFICIENT_STORAGE]'; exit 1; }; "
         // Отменённая или неполная передача не должна перезаписывать существующий файл расширения.
         return "trap \"rm -f '$temporary'\" EXIT; mkdir -p '$root' && [ ! -L '$dir' ] && mkdir -p '$dir' && " +
             "[ \"\$(readlink -f '$dir')\" = \"\$(readlink -f '$root')/$packageName\" ] && " +
-            "[ ! -L '$path' ] && [ ! -d '$path' ] && ( set -C; cat > '$temporary' ) && " +
+            "[ ! -L '$path' ] && [ ! -d '$path' ] && ( $checkSpace set -C; cat > '$temporary' ) && " +
             "[ \"\$(wc -c < '$temporary')\" -eq $size ] && chmod 644 '$temporary' && mv -fT '$temporary' '$path' && echo Success"
     }
 }

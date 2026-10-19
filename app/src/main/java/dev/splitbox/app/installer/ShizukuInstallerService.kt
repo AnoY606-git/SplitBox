@@ -31,10 +31,10 @@ class ShizukuInstallerService : IPrivilegedInstaller.Stub() {
         authorize(userId)
         return sessions.createSession(userId, totalBytes, downgrade)
     }
-    @Synchronized override fun writeApk(sessionId: Int, index: Int, size: Long, source: ParcelFileDescriptor) {
+    @Synchronized override fun writeApk(sessionId: Int, index: Int, size: Long, source: ParcelFileDescriptor, progress: ITransferProgress?) {
         ParcelFileDescriptor.AutoCloseInputStream(source).use { input ->
             authorize()
-            sessions.writeApk(sessionId, index, size, input)
+            sessions.writeApk(sessionId, index, size, input) { bytes -> runCatching { progress?.onProgress(bytes) } }
         }
     }
     @Synchronized override fun commitSession(sessionId: Int): String {
@@ -45,12 +45,14 @@ class ShizukuInstallerService : IPrivilegedInstaller.Stub() {
         authorize()
         sessions.abandonSession(sessionId)
     }
-    @Synchronized override fun copyObb(userId: Int, packageName: String, version: Long, basename: String, size: Long, source: ParcelFileDescriptor): String {
+    @Synchronized override fun copyObb(userId: Int, packageName: String, version: Long, basename: String, size: Long, source: ParcelFileDescriptor, progress: ITransferProgress?): String {
         return ParcelFileDescriptor.AutoCloseInputStream(source).use { input ->
             authorize(userId)
-            require(size in 1..(4L * 1024 * 1024 * 1024)) { "Размер OBB должен быть больше нуля и не превышать 4 ГиБ" }
+            require(size > 0) { "Размер OBB должен быть положительным" }
             val command = ObbPolicy.copyCommand(userId, packageName, version, basename, size)
-            runner.run(listOf("sh", "-c", command), input).requireSuccess().output
+            val reporting = TransferProgress(size) { bytes, _ -> runCatching { progress?.onProgress(bytes) } }
+            runner.run(listOf("sh", "-c", command), ProgressInputStream(input, reporting::report),
+                timeoutSeconds = TransferPolicy.timeoutSeconds(size)).requireSuccess().output
         }
     }
     override fun destroy() {
@@ -66,30 +68,32 @@ class ShizukuInstallerService : IPrivilegedInstaller.Stub() {
 
 /** Ограниченные команды и ownership одного UserService; Binder проверяет UID перед каждым вызовом. */
 internal class PrivilegedSessionCommands(private val runner: CommandRunner) {
-    private val sessions = ConcurrentHashMap.newKeySet<Int>()
+    private val sessions = ConcurrentHashMap<Int, Long>()
     fun createSession(userId: Int, totalBytes: Long, downgrade: Boolean): Int {
-        require(totalBytes in 1..(4L * 1024 * 1024 * 1024)) { "Общий размер APK должен быть больше нуля и не превышать 4 ГиБ" }
+        require(totalBytes > 0) { "Общий размер APK должен быть положительным" }
         val id = PmProtocol.sessionId(runner.run(listOf("sh", "-c", PmProtocol.create(userId, totalBytes, downgrade))))
-        sessions.add(id)
+        sessions[id] = totalBytes
         return id
     }
-    fun writeApk(sessionId: Int, index: Int, size: Long, input: InputStream) {
-        check(sessionId in sessions) { "Сессия не принадлежит этому соединению" }
-        require(index in 0..4095 && size in 1..(4L * 1024 * 1024 * 1024)) { "Недопустимый номер части или размер APK" }
-        runner.run(listOf("sh", "-c", PmProtocol.write(sessionId, index, size)), input).requireSuccess()
+    fun writeApk(sessionId: Int, index: Int, size: Long, input: InputStream, progress: (Long) -> Unit = {}) {
+        check(sessions.containsKey(sessionId)) { "Сессия не принадлежит этому соединению" }
+        require(index in 0..4095 && size > 0 && size <= sessions.getValue(sessionId)) { "Недопустимый номер части или размер APK" }
+        val reporting = TransferProgress(size) { bytes, _ -> progress(bytes) }
+        runner.run(listOf("sh", "-c", PmProtocol.write(sessionId, index, size)), ProgressInputStream(input, reporting::report),
+            timeoutSeconds = TransferPolicy.timeoutSeconds(size)).requireSuccess()
     }
     fun commitSession(sessionId: Int): String {
-        check(sessions.remove(sessionId)) { "Сессия не принадлежит этому соединению" }
+        val size = checkNotNull(sessions.remove(sessionId)) { "Сессия не принадлежит этому соединению" }
         // После отправки commit нельзя abandon по потере Binder: установка могла завершиться.
-        val result = runner.run(listOf("sh", "-c", PmProtocol.commit(sessionId)))
-        if (result.provenCommitFailure) sessions.add(sessionId)
+        val result = runner.run(listOf("sh", "-c", PmProtocol.commit(sessionId)), timeoutSeconds = TransferPolicy.timeoutSeconds(size))
+        if (result.provenCommitFailure) sessions[sessionId] = size
         // Отказ передаётся как ответ PM; transport exception не выдаётся за подтверждённую ошибку PM.
         return if (result.exitCode == 0 || result.provenCommitFailure) result.output else ""
     }
     fun abandonSession(sessionId: Int) {
-        if (sessions.remove(sessionId)) runner.run(listOf("sh", "-c", PmProtocol.abandon(sessionId)), timeoutSeconds = 15).requireSuccess()
+        if (sessions.remove(sessionId) != null) runner.run(listOf("sh", "-c", PmProtocol.abandon(sessionId)), timeoutSeconds = 15).requireSuccess()
     }
     fun abandonAll() {
-        sessions.toList().forEach { id -> runCatching { abandonSession(id) } }
+        sessions.keys.toList().forEach { id -> runCatching { abandonSession(id) } }
     }
 }

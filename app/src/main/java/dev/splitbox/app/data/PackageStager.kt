@@ -56,7 +56,9 @@ class PackageStager(private val context: Context) {
         try {
             val source = openSource(uri)
             return source.use { input -> destination.outputStream().use { output ->
-                val result = SourceCopier.copy(input, output, maxBytes, computeSha256, cancelled, progress)
+                val result = SourceCopier.copy(input, output, maxBytes, computeSha256, cancelled, progress) { required ->
+                    PackageSizePolicy.requireSpace(required, destination.parentFile!!.usableSpace)
+                }
                 output.fd.sync()
                 result
             } }

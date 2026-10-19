@@ -7,7 +7,7 @@ import dev.splitbox.core.ApkEntry
 import dev.splitbox.core.PreparedPackage
 
 data class InstallRequest(val prepared: PreparedPackage, val apks: List<ApkEntry>,
-    val settings: AppSettings, val appLabel: String, val userId: Int, val onCommitted: () -> Unit = {}, val onCommitStarted: () -> Unit = {}, val onSessionCreated: (Int) -> Unit = {})
+    val settings: AppSettings, val appLabel: String, val userId: Int, val onCommitted: () -> Unit = {}, val onCommitStarted: () -> Unit = {}, val onSessionCreated: (Int) -> Unit = {}, val onObbCopyStarted: () -> Unit = {})
 sealed interface BackendOutcome {
     data class Finished(val result: OperationResult) : BackendOutcome
     data class SystemPending(val sessionId: Int) : BackendOutcome

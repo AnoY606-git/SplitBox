@@ -15,18 +15,22 @@ internal class PackageImporter(private val stager: PackageStager) {
         onAnalysis: (String, Float?) -> Unit): PreparedImport {
         val total = ImportSelection.knownTotal(uris.map(stager::sourceSize))
         onCopy(total, 0)
-        val progress: (Long) -> Unit = { onCopy(total, it) }
+        val reporting = dev.splitbox.app.installer.TransferProgress(total) { bytes, _ -> onCopy(total, bytes) }
+        val progress: (Long) -> Unit = reporting::report
+        val sourceBudget = PackageSizePolicy.copyBudget(options.maxExpandedBytes, directory.usableSpace)
         if (uris.size == 1) {
             val uri = uris.single()
             val name = stager.name(uri)
             val source = File(directory, "source.bin")
-            val copied = stager.copy(uri, source, options.maxExpandedBytes, cancelled, progress, computeSha256)
+            val copied = stager.copy(uri, source, sourceBudget, cancelled, progress, computeSha256)
+            onCopy(total, copied.bytes)
             onAnalysis(name, null)
             val prepared = ArchivePreparer().prepare(source, name, directory, device, options, onAnalysis, cancelled)
             return PreparedImport(prepared, source, copied.sha256)
         }
-        val staged = MultiApkStager.stage(uris, directory, options.maxExpandedBytes, stager::name,
+        val staged = MultiApkStager.stage(uris, directory, sourceBudget, stager::name,
             stager::openSource, cancelled, progress)
+        onCopy(total, staged.fold(0L) { sum, entry -> Math.addExact(sum, entry.file.length()) })
         onAnalysis("Набор из ${uris.size} APK", null)
         val prepared = StagedApkPreparer().prepare(staged, directory, device, options, onAnalysis, cancelled)
         // У набора нет единственного исходного файла и единственного SHA-256.

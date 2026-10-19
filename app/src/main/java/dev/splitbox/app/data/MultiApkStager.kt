@@ -27,7 +27,9 @@ object MultiApkStager {
                 val destination = File(workDir, "$prefix.apk")
                 check(destination.createNewFile()) { "Временный файл уже существует" }
                 val copied = open(source).use { input -> destination.outputStream().use { output ->
-                    val result = SourceCopier.copy(input, output, maxBytes - total, false, cancelled) { progress(total + it) }
+                    val result = SourceCopier.copy(input, output, maxBytes - total, false, cancelled, { progress(total + it) }) { required ->
+                        PackageSizePolicy.requireSpace(required, workDir.usableSpace)
+                    }
                     output.fd.sync()
                     result
                 } }

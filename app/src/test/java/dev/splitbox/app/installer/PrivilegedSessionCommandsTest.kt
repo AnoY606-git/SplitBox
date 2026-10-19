@@ -22,6 +22,15 @@ class PrivilegedSessionCommandsTest {
             }
         }
     }
+    @Test fun packageAndSingleApkOverEightGiBArePassedToPmWithoutTruncation() {
+        val runner = Runner()
+        val commands = PrivilegedSessionCommands(runner)
+        val bytes = 9663676417L
+        val id = commands.createSession(0, bytes, false)
+        commands.writeApk(id, 0, bytes, InputStream.nullInputStream())
+        assertEquals(listOf("pm install-create --user 0 -r -S 9663676417",
+            "pm install-write -S 9663676417 42 'split_0.apk' -"), runner.commands)
+    }
     @Test fun createRegistersOwnershipForDisconnectCleanup() {
         val runner = Runner()
         val commands = PrivilegedSessionCommands(runner)
@@ -73,7 +82,7 @@ class PrivilegedSessionCommandsTest {
         val runner = Runner()
         val commands = PrivilegedSessionCommands(runner)
         assertTrue(runCatching { commands.createSession(0, 0, false) }.isFailure)
-        assertTrue(runCatching { commands.createSession(0, 4294967297L, false) }.isFailure)
+        assertTrue(runCatching { commands.createSession(0, -1, false) }.isFailure)
         assertTrue(runner.commands.isEmpty())
         commands.createSession(0, 3, false)
         assertTrue(runCatching { commands.writeApk(42, 4096, 3, InputStream.nullInputStream()) }.isFailure)

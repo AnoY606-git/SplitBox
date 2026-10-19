@@ -11,7 +11,14 @@ import org.json.JSONObject
 
 class SettingsRepository(context: Context) {
     private val prefs = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
+    private val migratedDefault = !prefs.getBoolean("sizePolicyV2", false) && prefs.getInt("maxExpandedGiB", 0) == 2
+    val sizeMigrationNotice: String? = if (migratedDefault)
+        "Прежний лимит по умолчанию 2 ГиБ заменён автоматическим ограничением по свободному месту. Если вы выбирали 2 ГиБ вручную, верните этот лимит в настройках." else null
     private val mutable = MutableStateFlow(read())
+    init {
+        if (!prefs.getBoolean("sizePolicyV2", false)) prefs.edit()
+            .putInt("maxExpandedGiB", mutable.value.maxExpandedGiB).putBoolean("sizePolicyV2", true).apply()
+    }
     val state: StateFlow<AppSettings> = mutable
     private fun read() = AppSettings(
         backend = runCatching { BackendMode.valueOf(prefs.getString("backend", "SYSTEM")!!) }.getOrDefault(BackendMode.SYSTEM),
@@ -20,18 +27,18 @@ class SettingsRepository(context: Context) {
         autoSelectSplits = prefs.getBoolean("autoSelectSplits", true),
         verifySignatures = prefs.getBoolean("verifySignatures", true),
         computeSha256 = prefs.getBoolean("computeSha256", true),
-        maxExpandedGiB = prefs.getInt("maxExpandedGiB", 2).takeIf { it in listOf(1, 2, 4) } ?: 2,
+        maxExpandedGiB = PackageSizePolicy.restoredLimit(if (prefs.contains("maxExpandedGiB")) prefs.getInt("maxExpandedGiB", 0) else null, prefs.getBoolean("sizePolicyV2", false)),
         cleanAfterInstall = prefs.getBoolean("cleanAfterInstall", true),
         saveHistory = prefs.getBoolean("saveHistory", true), haptics = prefs.getBoolean("haptics", true),
         keepScreenOn = prefs.getBoolean("keepScreenOn", true), installObb = prefs.getBoolean("installObb", false),
         allowDowngrade = prefs.getBoolean("allowDowngrade", false)
     )
     fun update(value: AppSettings) {
-        require(value.maxExpandedGiB in listOf(1, 2, 4)) { "Лимит распаковки должен составлять 1, 2 или 4 ГиБ" }
+        require(value.maxExpandedGiB in PackageSizePolicy.choicesGiB) { "Некорректный лимит размера пакета" }
         prefs.edit().putString("backend", value.backend.name).putString("theme", value.theme.name)
             .putBoolean("dynamicColors", value.dynamicColors).putBoolean("autoSelectSplits", value.autoSelectSplits)
             .putBoolean("verifySignatures", value.verifySignatures).putBoolean("computeSha256", value.computeSha256)
-            .putInt("maxExpandedGiB", value.maxExpandedGiB).putBoolean("cleanAfterInstall", value.cleanAfterInstall)
+            .putInt("maxExpandedGiB", value.maxExpandedGiB).putBoolean("sizePolicyV2", true).putBoolean("cleanAfterInstall", value.cleanAfterInstall)
             .putBoolean("saveHistory", value.saveHistory).putBoolean("haptics", value.haptics)
             .putBoolean("keepScreenOn", value.keepScreenOn).putBoolean("installObb", value.installObb)
             .putBoolean("allowDowngrade", value.allowDowngrade).apply()

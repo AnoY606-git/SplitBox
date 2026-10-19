@@ -15,6 +15,14 @@ class ObbCopyTest {
     }
     private fun command(root: File, expectedSize: Long) = ObbPolicy.copyCommand(0, "dev.test.game", 99,
         "main.1.dev.test.game.obb", expectedSize).replace("/storage/emulated/0/Android/obb", root.absolutePath)
+    @Test fun insufficientDestinationSpacePreservesExistingObbBeforeTransfer() = inRoot { root ->
+        val target = File(root, "dev.test.game/main.1.dev.test.game.obb").apply { parentFile!!.mkdirs(); writeText("old") }
+        val result = ProcessRunner().run(listOf("sh", "-c", command(root, Long.MAX_VALUE)), "data".byteInputStream())
+        assertFalse(result.success)
+        assertTrue(result.output, result.output.contains("INSUFFICIENT_STORAGE"))
+        assertEquals("old", target.readText())
+        assertEquals(listOf(target.name), target.parentFile!!.listFiles()!!.map { it.name })
+    }
     @Test fun completeStreamAtomicallyReplacesExistingObb() = inRoot { root ->
         val target = File(root, "dev.test.game/main.1.dev.test.game.obb").apply { requireNotNull(parentFile) { "У тестового файла нет родительского каталога" }.mkdirs(); writeText("old") }
         val result = ProcessRunner().run(listOf("sh", "-c", command(root, 4)), ByteArrayInputStream("data".toByteArray()))

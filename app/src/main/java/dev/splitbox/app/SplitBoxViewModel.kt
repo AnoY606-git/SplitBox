@@ -98,6 +98,7 @@ class SplitBoxViewModel(application: Application) : AndroidViewModel(application
         }
     }
     init {
+        settingsRepository.sizeMigrationNotice?.let(::reportMessage)
         Shizuku.addBinderReceivedListenerSticky(receivedListener)
         Shizuku.addBinderDeadListener(deadListener)
         Shizuku.addRequestPermissionResultListener(permissionListener)
@@ -249,10 +250,10 @@ class SplitBoxViewModel(application: Application) : AndroidViewModel(application
                 val job = currentCoroutineContext().job
                 val imported = withContext(Dispatchers.IO) {
                     PackageImporter(stager).prepare(uris, workDirectory, device(),
-                        PrepareOptions(options.maxExpandedGiB.toLong() * 1024 * 1024 * 1024, options.autoSelectSplits),
+                        PrepareOptions(PackageSizePolicy.maxBytes(options.maxExpandedGiB), options.autoSelectSplits),
                         options.computeSha256, { !job.isActive },
                         { total, bytes -> mutableUi.update { it.copy(sourceBytes = total, copiedBytes = bytes,
-                            progress = total?.takeIf { it > 0 }?.let { bytes.toFloat() / it },
+                            progress = total?.takeIf { it > 0 }?.let { (bytes.toDouble() / it).coerceIn(0.0, 1.0).toFloat() },
                             detail = "Скопировано ${bytes / (1024 * 1024)} МиБ") } },
                         { detail, progress -> mutableUi.update { it.copy(phase = OperationPhase.ANALYZING,
                             title = "Проверка пакета", detail = detail, progress = progress) } })
@@ -281,21 +282,13 @@ class SplitBoxViewModel(application: Application) : AndroidViewModel(application
                     prepared = checked, selectedPaths = selected, sha256 = sha, appLabel = label)
                 checkpointOwner = checked.workDir.absolutePath
                 validateCurrentSelection()
-            } catch (e: CancellationException) {
-                withContext(NonCancellable + Dispatchers.IO) { directory?.let {
-                    journal.clearPreparedDirectory(it.absolutePath)
-                    stager.delete(it)
-                } }
-                activeDirectory = null; currentSource = null
-                mutableUi.value = UiState(title = "Операция отменена")
             } catch (e: Exception) {
-                withContext(Dispatchers.IO) { directory?.let {
+                val recovered = recoverFailedImport(e) { directory?.let {
                     journal.clearPreparedDirectory(it.absolutePath)
                     stager.delete(it)
                 } }
                 activeDirectory = null; currentSource = null
-                mutableUi.value = UiState(OperationPhase.ERROR, "Не удалось подготовить файл", e.message ?: "Неизвестная ошибка",
-                    result = OperationResult(false, e.message ?: "Неизвестная ошибка"))
+                mutableUi.value = recovered
             } finally { withContext(NonCancellable) { refreshCache() } }
         }
     }
@@ -364,6 +357,9 @@ class SplitBoxViewModel(application: Application) : AndroidViewModel(application
                         check(entry.file.isFile && entry.file.length() == entry.size && entry.size > 0) { "Временный APK изменился или удалён. Выберите файл заново." }
                         check(entry.file.canonicalFile.toPath().startsWith(prepared.workDir.canonicalFile.toPath())) { "APK находится вне закрытого кэша приложения" }
                     }
+                    // Исходник и распакованные данные уже занимают кэш; сессии Android нужна ещё одна копия APK.
+                    val sessionBytes = selected.fold(0L) { sum, entry -> Math.addExact(sum, entry.size) }
+                    PackageSizePolicy.requireSpace(sessionBytes, prepared.workDir.usableSpace)
                     if (options.verifySignatures) stager.verifySignatures(selected, Build.VERSION.SDK_INT) { !job.isActive }
                     if (options.backend != BackendMode.SYSTEM) {
                         tracker = PrivilegedOperationTracker(privilegedStore).also { it.begin(PrivilegedOperationRecord(
@@ -380,7 +376,7 @@ class SplitBoxViewModel(application: Application) : AndroidViewModel(application
                     }, onCommitStarted = {
                         tracker?.commitStarted()
                         mutableUi.update { it.copy(canCancel = false) }
-                    }, onSessionCreated = { tracker?.sessionCreated(it) })
+                    }, onSessionCreated = { tracker?.sessionCreated(it) }, onObbCopyStarted = { mutableUi.update { it.copy(title = "Перенос OBB", canCancel = true) } })
                 backendStarted = true
                 when (val outcome = registry.select(options.backend).install(request) { detail, progress ->
                     mutableUi.update { it.copy(detail = detail, progress = progress) }
@@ -492,32 +488,22 @@ class SplitBoxViewModel(application: Application) : AndroidViewModel(application
     }
     private suspend fun finish(result: OperationResult, prepared: PreparedPackage?, options: AppSettings,
         label: String, id: String, stored: PendingInstall? = null, cleanupDirectory: String? = null): Boolean {
-        journal.clearPreparedDirectory()
+        var keepForObb = false
         val persistence = runCatching { withContext(Dispatchers.IO) {
-            journal.flush()
             if (options.saveHistory) historyRepository.add(HistoryEntry(id, System.currentTimeMillis(), label,
                 result.packageName ?: prepared?.metadata?.packageName.orEmpty(), prepared?.metadata?.versionName ?: stored?.versionName.orEmpty(),
                 prepared?.sourceName ?: stored?.sourceName.orEmpty(), options.backend, result.success,
                 listOfNotNull(result.message, result.obbWarning).joinToString("\n")))
-            if (options.cleanAfterInstall) {
-                val directory = prepared?.workDir ?: (stored?.workDir ?: cleanupDirectory)?.let(::File)
-                if (directory != null) {
-                    val keepObb = result.success && result.obbWarning != null && prepared?.obbFiles?.isNotEmpty() == true
-                    if (keepObb) {
-                        val keep = prepared!!.obbFiles.map { it.file.canonicalPath }.toSet()
-                        directory.walkBottomUp().forEach { file ->
-                            if (file.isFile && file.canonicalPath !in keep) file.delete()
-                            else if (file.isDirectory && file != directory && file.listFiles()?.isEmpty() == true) file.delete()
-                        }
-                    } else stager.delete(directory)
-                }
-            }
+            keepForObb = finishPreparedStorage(result, prepared, (stored?.workDir ?: cleanupDirectory)?.let(::File),
+                options.cleanAfterInstall, journal::savePreparedDirectory, { journal.clearPreparedDirectory() }, journal::flush, stager::delete)
         } }
         persistence.exceptionOrNull()?.let { reportMessage("Результат установки известен, но сохранение или очистка не завершены: ${it.message}", NoticeAction.RETRY_SAVE) }
-        val retained = if (persistence.isFailure || !options.cleanAfterInstall || (result.success && result.obbWarning != null && prepared?.obbFiles?.isNotEmpty() == true)) prepared else null
+        val retained = if (persistence.isFailure || !options.cleanAfterInstall || keepForObb) prepared else null
+        val displayedResult = if (keepForObb) result.copy(obbWarning = result.obbWarning +
+            " Пакет с OBB сохранён для экспорта после перезапуска. Очистите кэш после экспорта.") else result
         mutableUi.update { it.copy(phase = if (result.success) OperationPhase.SUCCESS else OperationPhase.ERROR,
             title = if (result.success) "Приложение установлено" else "Установка не выполнена", detail = result.message,
-            progress = null, prepared = retained, result = result, canCancel = false, pendingPackageName = null) }
+            progress = null, prepared = retained, result = displayedResult, canCancel = false, pendingPackageName = null) }
         if (retained == null) { activeDirectory = null; currentSource = null }
         refreshCache()
         return persistence.isSuccess
@@ -770,6 +756,11 @@ class SplitBoxViewModel(application: Application) : AndroidViewModel(application
                     withContext(Dispatchers.IO) {
                         val names = HashSet<String>()
                         val output = context.contentResolver.openOutputStream(destination, "wt") ?: throw IOException("Не удалось открыть место экспорта")
+                        val totalBytes = prepared.obbFiles.fold(0L) { sum, entry -> Math.addExact(sum, entry.size) }
+                        var exported = 0L
+                        val reporting = TransferProgress(totalBytes) { bytes, fraction -> mutableUi.update {
+                            it.copy(detail = "Экспортировано ${bytes / 1048576} МиБ", progress = fraction, sourceBytes = totalBytes, copiedBytes = bytes)
+                        } }
                         ZipOutputStream(output).use { zip ->
                             prepared.obbFiles.forEach { entry ->
                                 val name = entry.archivePath.substringAfterLast('/')
@@ -784,6 +775,8 @@ class SplitBoxViewModel(application: Application) : AndroidViewModel(application
                                         val count = input.read(buffer)
                                         if (count < 0) break
                                         zip.write(buffer, 0, count)
+                                        exported = Math.addExact(exported, count.toLong())
+                                        reporting.report(exported)
                                     }
                                 }
                                 zip.closeEntry()

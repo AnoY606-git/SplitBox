@@ -10,6 +10,28 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class SourceCopierTest {
+    @Test fun changingDiskSpaceStopsBeforeWritingTheNextChunk() {
+        val output = ByteArrayOutputStream()
+        var checks = 0
+        assertThrows(IOException::class.java) {
+            SourceCopier.copy(ByteArray(65537).inputStream(), output, Long.MAX_VALUE, false, { false }, {}) { bytes ->
+                PackageSizePolicy.requireSpace(bytes, if (checks++ == 0) 67_174_400L else 67_108_864L)
+            }
+        }
+        assertEquals(65536, output.size())
+    }
+    @Test fun sourceOverEightGiBStreamsWithoutAllocatingIt() {
+        var remaining = 9_663_676_417L
+        val input = object : java.io.InputStream() {
+            override fun read(): Int = error("Побайтовое чтение не ожидалось")
+            override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
+                if (remaining == 0L) return -1
+                return minOf(length.toLong(), remaining).toInt().also { remaining -= it }
+            }
+        }
+        val result = SourceCopier.copy(input, java.io.OutputStream.nullOutputStream(), Long.MAX_VALUE, false, { false }, {})
+        assertEquals(9_663_676_417L, result.bytes)
+    }
     @Test fun digestMatchesKnownVectorAcrossReadBoundaries() {
         listOf(1, 2, 3, 65536).forEach { chunk ->
             val source = object : ByteArrayInputStream("abc".toByteArray()) {

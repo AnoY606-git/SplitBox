@@ -30,14 +30,20 @@ class RootInstallBackend(private val runner: CommandRunner = ProcessRunner()) : 
                     request.onSessionCreated(it)
                 }
             }
+            var written = 0L
+            val reporting = TransferProgress(size) { bytes, fraction -> progress("Root: запись APK · ${bytes / 1048576} МиБ", fraction) }
             request.apks.forEachIndexed { index, apk ->
                 currentCoroutineContext().ensureActive()
-                progress("Root: запись APK ${index + 1} из ${request.apks.size}", index.toFloat() / request.apks.size)
+                progress("Root: запись APK ${index + 1} из ${request.apks.size}", (written.toDouble() / size).toFloat())
                 runInterruptible(Dispatchers.IO) {
                     apk.file.inputStream().use { input ->
-                        runner.run(listOf("su", "-c", PmProtocol.write(id, index, apk.file.length())), input).requireSuccess()
+                        runner.run(listOf("su", "-c", PmProtocol.write(id, index, apk.file.length())),
+                            ProgressInputStream(input) { reporting.report(written + it) },
+                            timeoutSeconds = TransferPolicy.timeoutSeconds(apk.file.length())).requireSuccess()
                     }
                 }
+                written = Math.addExact(written, apk.file.length())
+                reporting.report(written)
             }
             currentCoroutineContext().ensureActive()
             progress("Root: установка", null)
@@ -46,7 +52,7 @@ class RootInstallBackend(private val runner: CommandRunner = ProcessRunner()) : 
                 request.onCommitStarted()
                 withContext(NonCancellable) {
                     commitMayHaveRun = true
-                    val result = runner.run(listOf("su", "-c", PmProtocol.commit(id)))
+                    val result = runner.run(listOf("su", "-c", PmProtocol.commit(id)), timeoutSeconds = TransferPolicy.timeoutSeconds(size))
                     commitResolved = result.success || result.provenCommitFailure
                     result.requireCommitSuccess(request.prepared.metadata.packageName)
                     committed = true
@@ -73,13 +79,16 @@ class RootInstallBackend(private val runner: CommandRunner = ProcessRunner()) : 
         if (!request.settings.installObb) return "OBB не перенесены: включите перенос OBB или экспортируйте ZIP."
         // Установка APK уже завершена; отмена дополнительного переноса OBB не отменяет этот успех.
         return try {
+            request.onObbCopyStarted()
             request.prepared.obbFiles.forEachIndexed { index, obb ->
                 currentCoroutineContext().ensureActive()
                 progress("Root: OBB ${index + 1} из ${request.prepared.obbFiles.size}", null)
                 val command = ObbPolicy.copyCommand(request.userId, request.prepared.metadata.packageName,
                     request.prepared.metadata.versionCode, obb.archivePath.substringAfterLast('/'), obb.size)
+                val reporting = TransferProgress(obb.size) { bytes, fraction -> progress("Root: OBB ${index + 1} · ${bytes / 1048576} МиБ", fraction) }
                 runInterruptible(Dispatchers.IO) {
-                    obb.file.inputStream().use { runner.run(listOf("su", "-c", command), it).requireSuccess() }
+                    obb.file.inputStream().use { input -> runner.run(listOf("su", "-c", command),
+                        ProgressInputStream(input, reporting::report), timeoutSeconds = TransferPolicy.timeoutSeconds(obb.size)).requireSuccess() }
                 }
             }
             null

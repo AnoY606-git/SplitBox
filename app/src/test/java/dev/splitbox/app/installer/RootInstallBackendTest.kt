@@ -31,6 +31,37 @@ class RootInstallBackendTest {
             return if (pm.startsWith("pm install-create")) PmResult(0, "Success: created install session [42]") else action(pm)
         }
     }
+    @Test fun slowLargeTransferReceivesDeadlineProportionalToSize() = fixture { request -> runBlocking {
+        java.io.RandomAccessFile(request.apks.single().file, "rw").use { it.setLength(9663676417L) }
+        var writeTimeout = 0L
+        var writeCommand = ""
+        val runner = object : CommandRunner {
+            override fun run(command: List<String>, input: InputStream?, timeoutSeconds: Long): PmResult {
+                if (command.last().startsWith("pm install-create")) return PmResult(0, "Success: created install session [42]")
+                if (command.last().startsWith("pm install-write")) { writeTimeout = timeoutSeconds; writeCommand = command.last() }
+                return PmResult(0, "Success")
+            }
+        }
+        RootInstallBackend(runner).install(request) { _, _ -> }
+        assertTrue("9 ГиБ на медленном носителе не должны обрываться через 120 секунд", writeTimeout >= 36900L)
+        assertEquals("pm install-write -S 9663676417 42 'split_0.apk' -", writeCommand)
+    } }
+    @Test fun obbStageBecomesCancellableOnlyAfterConfirmedCommitAndKeepsApkSuccess() = fixture { request -> runBlocking {
+        val obbFile = request.prepared.workDir.resolve("main.1.dev.test.game.obb").apply { writeText("obb") }
+        val prepared = request.prepared.copy(obbFiles = listOf(ObbEntry(obbFile, obbFile.name, 3)))
+        val phases = mutableListOf<String>()
+        var finished: BackendOutcome? = null
+        val operation = launch {
+            finished = RootInstallBackend(Runner()).install(request.copy(prepared = prepared,
+                settings = request.settings.copy(installObb = true), onCommitStarted = { phases += "commit" },
+                onCommitted = { phases += "confirmed" }, onObbCopyStarted = { phases += "obb"; this@launch.cancel() })) { _, _ -> }
+        }
+        operation.join()
+        assertEquals(listOf("commit", "confirmed", "obb"), phases)
+        val result = (finished as BackendOutcome.Finished).result
+        assertTrue(result.success)
+        assertNotNull(result.obbWarning)
+    } }
     @Test fun cancellationInsideSessionCallbackStillAbandonsOwnedSession() = fixture { request -> runBlocking {
         val runner = Runner()
         var receivedId: Int? = null

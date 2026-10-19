@@ -35,7 +35,7 @@ internal fun restoreAfterObbExport(before: UiState, current: UiState, checkpoint
 /** Один finally обслуживает успех, ошибку и отмену; поздний итог Android сохраняет приоритет. */
 internal suspend fun runObbExport(before: UiState, ui: MutableStateFlow<UiState>, checkpointOwner: () -> String?,
     saved: () -> SaveQueueState, validation: () -> SelectionValidation, export: suspend () -> Unit) {
-    ui.update { it.copy(phase = OperationPhase.COPYING, title = "Экспорт OBB", progress = null, canCancel = true) }
+    ui.update { it.copy(phase = OperationPhase.COPYING, title = "Экспорт OBB", progress = null, copiedBytes = 0, sourceBytes = null, canCancel = true) }
     try { export() }
     finally { ui.update { restoreAfterObbExport(before, it, checkpointOwner(), saved(), validation()) } }
 }

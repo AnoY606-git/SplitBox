@@ -34,7 +34,7 @@ class ShizukuInstallBackend(private val context: Context) : InstallBackend {
     override suspend fun install(request: InstallRequest, progress: (String, Float?) -> Unit): BackendOutcome {
         check(isGranted()) { "Нет разрешения Shizuku. Запустите Shizuku и разрешите доступ." }
         val args = Shizuku.UserServiceArgs(ComponentName(context, ShizukuInstallerService::class.java))
-            .daemon(false).processNameSuffix("installer").debuggable(false).version(1).tag("splitbox-installer")
+            .daemon(false).processNameSuffix("installer").debuggable(false).version(2).tag("splitbox-installer")
         val connection = Connection(args)
         val clientToken = Binder()
         val globalDeath = Shizuku.OnBinderDeadListener { connection.loss.complete(Unit) }
@@ -58,12 +58,25 @@ class ShizukuInstallBackend(private val context: Context) : InstallBackend {
                     request.onSessionCreated(it)
                 }
             }
+            var written = 0L
+            val reporting = TransferProgress(size) { bytes, fraction -> progress("Shizuku: запись APK · ${bytes / 1048576} МиБ", fraction) }
             request.apks.forEachIndexed { index, entry ->
                 currentCoroutineContext().ensureActive()
-                progress("Shizuku: запись APK ${index + 1} из ${request.apks.size}", index.toFloat() / request.apks.size)
-                ParcelFileDescriptor.open(entry.file, ParcelFileDescriptor.MODE_READ_ONLY).use { descriptor ->
-                    remoteCall(loss = connection.loss) { remote.writeApk(id, index, entry.file.length(), descriptor) }
+                progress("Shizuku: запись APK ${index + 1} из ${request.apks.size}", (written.toDouble() / size).toFloat())
+                val offset = written
+                val receiving = java.util.concurrent.atomic.AtomicBoolean(true)
+                val callback = object : ITransferProgress.Stub() {
+                    override fun onProgress(bytes: Long) { if (receiving.get() && bytes in 0..entry.file.length()) reporting.report(offset + bytes) }
                 }
+                try {
+                    ParcelFileDescriptor.open(entry.file, ParcelFileDescriptor.MODE_READ_ONLY).use { descriptor ->
+                        remoteCall(TransferPolicy.binderTimeoutMs(entry.file.length()), connection.loss) {
+                            remote.writeApk(id, index, entry.file.length(), descriptor, callback)
+                        }
+                    }
+                    written = Math.addExact(written, entry.file.length())
+                    reporting.report(written)
+                } finally { receiving.set(false) }
             }
             currentCoroutineContext().ensureActive()
             progress("Shizuku: установка", null)
@@ -72,7 +85,7 @@ class ShizukuInstallBackend(private val context: Context) : InstallBackend {
                 request.onCommitStarted()
                 withContext(NonCancellable) {
                     commitMayHaveRun = true
-                    val output = remoteCall(loss = connection.loss) { remote.commitSession(id) }
+                    val output = remoteCall(TransferPolicy.binderTimeoutMs(size), connection.loss) { remote.commitSession(id) }
                     val result = PmResult(0, output)
                     commitResolved = result.success || result.provenCommitFailure
                     result.requireCommitSuccess(request.prepared.metadata.packageName)
@@ -104,14 +117,23 @@ class ShizukuInstallBackend(private val context: Context) : InstallBackend {
         if (request.prepared.obbFiles.isEmpty()) return null
         if (!request.settings.installObb) return "OBB не перенесены: включите перенос OBB или экспортируйте ZIP."
         return try {
+            request.onObbCopyStarted()
             request.prepared.obbFiles.forEachIndexed { index, entry ->
                 currentCoroutineContext().ensureActive()
                 progress("Shizuku: OBB ${index + 1} из ${request.prepared.obbFiles.size}", null)
                 ObbPolicy.destination(request.userId, request.prepared.metadata.packageName, request.prepared.metadata.versionCode, entry.archivePath.substringAfterLast('/'))
-                ParcelFileDescriptor.open(entry.file, ParcelFileDescriptor.MODE_READ_ONLY).use { descriptor ->
-                    remoteCall(loss = loss) { remote.copyObb(request.userId, request.prepared.metadata.packageName,
-                        request.prepared.metadata.versionCode, entry.archivePath.substringAfterLast('/'), entry.file.length(), descriptor) }
+                val receiving = java.util.concurrent.atomic.AtomicBoolean(true)
+                val reporting = TransferProgress(entry.size) { bytes, fraction -> progress("Shizuku: OBB ${index + 1} · ${bytes / 1048576} МиБ", fraction) }
+                val callback = object : ITransferProgress.Stub() {
+                    override fun onProgress(bytes: Long) { if (receiving.get() && bytes in 0..entry.size) reporting.report(bytes) }
                 }
+                try {
+                    ParcelFileDescriptor.open(entry.file, ParcelFileDescriptor.MODE_READ_ONLY).use { descriptor ->
+                        remoteCall(TransferPolicy.binderTimeoutMs(entry.size), loss) { remote.copyObb(request.userId, request.prepared.metadata.packageName,
+                            request.prepared.metadata.versionCode, entry.archivePath.substringAfterLast('/'), entry.file.length(), descriptor, callback) }
+                    }
+                    reporting.report(entry.size)
+                } finally { receiving.set(false) }
             }
             null
         } catch (e: Exception) { "APK установлен, но OBB не перенесены: ${e.message ?: "перенос отменён"}. Используйте экспорт ZIP." }

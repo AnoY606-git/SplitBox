@@ -147,13 +147,16 @@ fun SettingsScreen(
                 SettingToggle("Проверять подписи APK", "Дополнительная криптографическая проверка до установки. Системная проверка Android действует всегда.", settings.verifySignatures, editable) { onUpdate(settings.copy(verifySignatures = it)) }
                 SettingToggle("Вычислять SHA-256", "Показать контрольную сумму исходного файла после подготовки.", settings.computeSha256, editable) { onUpdate(settings.copy(computeSha256 = it)) }
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                SectionHeading("Лимит распаковки", "Ограничение фактически распакованных данных защищает память от чрезмерно больших архивов.")
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf(1, 2, 4).forEach { gib ->
-                        OutlinedButton(
-                            onClick = { onUpdate(settings.copy(maxExpandedGiB = gib)) }, modifier = Modifier.weight(1f).semantics { selected = settings.maxExpandedGiB == gib }, enabled = editable,
-                            colors = if (settings.maxExpandedGiB == gib) ButtonDefaults.outlinedButtonColors(containerColor = MaterialTheme.colorScheme.primaryContainer, contentColor = MaterialTheme.colorScheme.onPrimaryContainer) else ButtonDefaults.outlinedButtonColors(),
-                        ) { Text("$gib ГиБ") }
+                SectionHeading("Размер пакета и свободное место", "Авто ограничивает копирование и распаковку свободным местом на диске, оставляя резерв 64 МиБ. Для архива нужны место под исходник, распакованные данные и дополнительную копию APK в сессии Android. Ручной лимит ограничивает исходник и распакованные данные по отдельности. Android и файловая система могут устанавливать свои ограничения.")
+                dev.splitbox.app.data.PackageSizePolicy.choicesGiB.chunked(4).forEach { limits ->
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        limits.forEach { gib ->
+                            OutlinedButton(
+                                onClick = { onUpdate(settings.copy(maxExpandedGiB = gib)) }, modifier = Modifier.weight(1f).semantics { selected = settings.maxExpandedGiB == gib }, enabled = editable,
+                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 8.dp),
+                                colors = if (settings.maxExpandedGiB == gib) ButtonDefaults.outlinedButtonColors(containerColor = MaterialTheme.colorScheme.primaryContainer, contentColor = MaterialTheme.colorScheme.onPrimaryContainer) else ButtonDefaults.outlinedButtonColors(),
+                            ) { Text(if (gib == 0) "Авто" else "$gib ГиБ", maxLines = 1) }
+                        }
                     }
                 }
             }

@@ -33,9 +33,11 @@ class SystemInstallBackend(private val context: Context, private val journal: In
                 obbWarning = if (request.prepared.obbFiles.isNotEmpty()) "OBB не копируются системным способом. Экспортируйте ZIP и перенесите файлы в Android/obb/${request.prepared.metadata.packageName}." else null))
             journal.flush()
             installer.openSession(id).use { session ->
+                var written = 0L
+                val reporting = TransferProgress(size) { bytes, fraction -> progress("Запись APK · ${bytes / 1048576} МиБ", fraction) }
                 request.apks.forEachIndexed { index, entry ->
                     currentCoroutineContext().ensureActive()
-                    progress("Запись APK ${index + 1} из ${request.apks.size}", index.toFloat() / request.apks.size)
+                    progress("Запись APK ${index + 1} из ${request.apks.size}", (written.toDouble() / size).toFloat())
                     session.openWrite("split_$index.apk", 0, entry.file.length()).use { output ->
                         entry.file.inputStream().use { input ->
                             val buffer = ByteArray(65536)
@@ -44,6 +46,8 @@ class SystemInstallBackend(private val context: Context, private val journal: In
                                 val count = input.read(buffer)
                                 if (count < 0) break
                                 output.write(buffer, 0, count)
+                                written = Math.addExact(written, count.toLong())
+                                reporting.report(written)
                             }
                         }
                         session.fsync(output)

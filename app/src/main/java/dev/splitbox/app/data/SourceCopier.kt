@@ -13,7 +13,7 @@ data class SourceCopyResult(val bytes: Long, val sha256: String?)
 /** Один ограниченный проход по источнику; жизненным циклом потоков и fsync управляет вызывающий код. */
 object SourceCopier {
     fun copy(input: InputStream, output: OutputStream, maxBytes: Long, computeSha256: Boolean,
-        cancelled: () -> Boolean, progress: (Long) -> Unit): SourceCopyResult {
+        cancelled: () -> Boolean, progress: (Long) -> Unit, checkSpace: (Long) -> Unit = {}): SourceCopyResult {
         require(maxBytes >= 0) { "Лимит копирования не может быть отрицательным" }
         val digest = if (computeSha256) MessageDigest.getInstance("SHA-256") else null
         val buffer = ByteArray(65536)
@@ -28,6 +28,7 @@ object SourceCopier {
             if (count < 0) break
             if (count == 0) continue
             if (count.toLong() > maxBytes - bytes) throw IOException("Входной файл превышает лимит $maxBytes байт")
+            checkSpace(count.toLong())
             output.write(buffer, 0, count)
             digest?.update(buffer, 0, count)
             bytes += count

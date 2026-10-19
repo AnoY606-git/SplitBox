@@ -11,7 +11,7 @@ data class AppSettings(
     val backend: BackendMode = BackendMode.SYSTEM,
     val theme: ThemeMode = ThemeMode.SYSTEM, val dynamicColors: Boolean = false,
     val autoSelectSplits: Boolean = true, val verifySignatures: Boolean = true,
-    val computeSha256: Boolean = true, val maxExpandedGiB: Int = 2,
+    val computeSha256: Boolean = true, val maxExpandedGiB: Int = 0,
     val cleanAfterInstall: Boolean = true, val saveHistory: Boolean = true,
     val haptics: Boolean = true, val keepScreenOn: Boolean = true,
     val installObb: Boolean = false, val allowDowngrade: Boolean = false
