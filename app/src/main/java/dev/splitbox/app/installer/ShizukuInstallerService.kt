@@ -49,10 +49,9 @@ class ShizukuInstallerService : IPrivilegedInstaller.Stub() {
         return ParcelFileDescriptor.AutoCloseInputStream(source).use { input ->
             authorize(userId)
             require(size > 0) { "Размер OBB должен быть положительным" }
-            val command = ObbPolicy.copyCommand(userId, packageName, version, basename, size)
+            val plan = ObbPolicy.copyPlan(userId, packageName, version, basename, size)
             val reporting = TransferProgress(size) { bytes, _ -> runCatching { progress?.onProgress(bytes) } }
-            runner.run(listOf("sh", "-c", command), ProgressInputStream(input, reporting::report),
-                timeoutSeconds = TransferPolicy.timeoutSeconds(size)).requireSuccess().output
+            copyShizukuObb(runner, plan, ProgressInputStream(input, reporting::report), size).output
         }
     }
     override fun destroy() {
@@ -95,5 +94,15 @@ internal class PrivilegedSessionCommands(private val runner: CommandRunner) {
     }
     fun abandonAll() {
         sessions.keys.toList().forEach { id -> runCatching { abandonSession(id) } }
+    }
+}
+
+/** Передача OBB в процессе UserService; владельцем временного файла является этот вызов. */
+internal fun copyShizukuObb(runner: CommandRunner, plan: ObbCopyPlan, input: InputStream, size: Long): PmResult {
+    try { return runner.run(listOf("sh", "-c", plan.command), input, timeoutSeconds = TransferPolicy.timeoutSeconds(size)).requireSuccess() }
+    finally {
+        // destroy() ждёт synchronized copyObb. Не запускаем новый процесс, который cancelAll мог бы тоже остановить.
+        try { java.nio.file.Files.deleteIfExists(java.io.File(plan.temporaryPath).toPath()) }
+        catch (e: Exception) { throw IllegalStateException("Не удалось удалить временный OBB ${plan.temporaryPath}: ${e.message}", e) }
     }
 }

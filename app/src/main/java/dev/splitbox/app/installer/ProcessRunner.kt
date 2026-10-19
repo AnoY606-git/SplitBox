@@ -43,10 +43,23 @@ class ProcessRunner : CommandRunner {
             }
             return result
         } finally {
-            process.destroy()
-            if (process.isAlive) process.destroyForcibly()
-            workers.shutdownNow()
-            active.remove(process)
+            var interrupted = Thread.interrupted()
+            try {
+                process.destroy()
+                if (process.isAlive) process.destroyForcibly()
+                // Возврат из runner означает, что основной shell уже не может создать временный файл.
+                val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
+                while (process.isAlive) {
+                    val remaining = deadline - System.nanoTime()
+                    check(remaining > 0) { "Не удалось завершить дочерний процесс за 5 секунд" }
+                    try { process.waitFor(remaining, TimeUnit.NANOSECONDS) }
+                    catch (_: InterruptedException) { interrupted = true }
+                }
+            } finally {
+                workers.shutdownNow()
+                active.remove(process)
+                if (interrupted) Thread.currentThread().interrupt()
+            }
         }
     }
 }

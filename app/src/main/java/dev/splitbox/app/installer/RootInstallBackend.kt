@@ -83,15 +83,23 @@ class RootInstallBackend(private val runner: CommandRunner = ProcessRunner()) : 
             request.prepared.obbFiles.forEachIndexed { index, obb ->
                 currentCoroutineContext().ensureActive()
                 progress("Root: OBB ${index + 1} из ${request.prepared.obbFiles.size}", null)
-                val command = ObbPolicy.copyCommand(request.userId, request.prepared.metadata.packageName,
+                val plan = ObbPolicy.copyPlan(request.userId, request.prepared.metadata.packageName,
                     request.prepared.metadata.versionCode, obb.archivePath.substringAfterLast('/'), obb.size)
                 val reporting = TransferProgress(obb.size) { bytes, fraction -> progress("Root: OBB ${index + 1} · ${bytes / 1048576} МиБ", fraction) }
-                runInterruptible(Dispatchers.IO) {
-                    obb.file.inputStream().use { input -> runner.run(listOf("su", "-c", command),
-                        ProgressInputStream(input, reporting::report), timeoutSeconds = TransferPolicy.timeoutSeconds(obb.size)).requireSuccess() }
+                try {
+                    runInterruptible(Dispatchers.IO) {
+                        obb.file.inputStream().use { input -> runner.run(listOf("su", "-c", plan.command),
+                            ProgressInputStream(input, reporting::report), timeoutSeconds = TransferPolicy.timeoutSeconds(obb.size)).requireSuccess() }
+                    }
+                } finally {
+                    // runInterruptible уже завершил дочерний процесс и снял interrupt с IO-потока.
+                    withContext(NonCancellable) { withContext(Dispatchers.IO) {
+                        try { runner.run(listOf("su", "-c", plan.cleanupCommand), timeoutSeconds = 15).requireSuccess() }
+                        catch (e: Exception) { throw IllegalStateException("Не удалось удалить временный OBB ${plan.temporaryPath}: ${e.message}", e) }
+                    } }
                 }
             }
             null
-        } catch (e: Exception) { "APK установлен, но OBB не перенесены: ${e.message ?: "перенос отменён"}. Используйте экспорт ZIP." }
+        } catch (e: Exception) { obbFailureWarning(e) }
     }
 }

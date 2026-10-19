@@ -136,7 +136,7 @@ class ShizukuInstallBackend(private val context: Context) : InstallBackend {
                 } finally { receiving.set(false) }
             }
             null
-        } catch (e: Exception) { "APK установлен, но OBB не перенесены: ${e.message ?: "перенос отменён"}. Используйте экспорт ZIP." }
+        } catch (e: Exception) { obbFailureWarning(e) }
     }
     /** Вызовы Binder нельзя прервать; ждём ответ, потерю соединения или истечение конечного срока. */
     private suspend fun <T> remoteCall(timeoutMs: Long = 150000, loss: Deferred<Unit>? = null, operation: () -> T): T = withTimeout(timeoutMs) {

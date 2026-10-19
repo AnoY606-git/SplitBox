@@ -60,7 +60,16 @@ class RootInstallBackendTest {
         assertEquals(listOf("commit", "confirmed", "obb"), phases)
         val result = (finished as BackendOutcome.Finished).result
         assertTrue(result.success)
-        assertNotNull(result.obbWarning)
+        assertEquals("APK установлен. Перенос OBB отменён. Используйте экспорт ZIP.", result.obbWarning)
+    } }
+    @Test fun failedOwnedTemporaryCleanupBecomesObbWarningAfterConfirmedApkSuccess() = fixture { request -> runBlocking {
+        val obbFile = request.prepared.workDir.resolve("main.1.dev.test.game.obb").apply { writeText("obb") }
+        val prepared = request.prepared.copy(obbFiles = listOf(ObbEntry(obbFile, obbFile.name, 3)))
+        val runner = Runner { if (it.startsWith("rm -f -- ")) PmResult(1, "Error [DENIED]") else PmResult(0, "Success") }
+        val outcome = RootInstallBackend(runner).install(request.copy(prepared = prepared,
+            settings = request.settings.copy(installObb = true))) { _, _ -> } as BackendOutcome.Finished
+        assertTrue(outcome.result.success)
+        assertTrue(outcome.result.obbWarning!!.contains("Не удалось удалить временный OBB"))
     } }
     @Test fun cancellationInsideSessionCallbackStillAbandonsOwnedSession() = fixture { request -> runBlocking {
         val runner = Runner()

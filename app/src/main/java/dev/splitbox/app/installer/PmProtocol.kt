@@ -30,6 +30,8 @@ object PmProtocol {
             ?: error("Некорректный идентификатор сессии")
     }
 }
+internal data class ObbCopyPlan(val command: String, val temporaryPath: String, val cleanupCommand: String)
+
 object ObbPolicy {
     fun destination(userId: Int, packageName: String, version: Long, basename: String): String {
         require(userId >= 0 && version >= 0) { "Некорректный пользователь Android или версия расширения OBB" }
@@ -41,7 +43,10 @@ object ObbPolicy {
         return "/storage/emulated/$userId/Android/obb/$packageName/$basename"
     }
     /** Все пути уже проверены destination(); пути из архива не попадают в командную оболочку. */
-    fun copyCommand(userId: Int, packageName: String, version: Long, basename: String, size: Long): String {
+    fun copyCommand(userId: Int, packageName: String, version: Long, basename: String, size: Long): String =
+        copyPlan(userId, packageName, version, basename, size).command
+
+    internal fun copyPlan(userId: Int, packageName: String, version: Long, basename: String, size: Long): ObbCopyPlan {
         require(size > 0) { "Размер файла OBB должен быть положительным" }
         val path = destination(userId, packageName, version, basename)
         val dir = path.substringBeforeLast('/')
@@ -53,10 +58,18 @@ object ObbPolicy {
         val checkSpace = "set -- \$(df -Pk '$dir' | tail -n 1); " +
             "case \"\$4\" in ''|*[!0-9]*) echo 'Error [SPACE_UNAVAILABLE]'; exit 1;; esac; " +
             "[ \"\$4\" -ge $requiredKiB ] || { echo 'Error [INSUFFICIENT_STORAGE]'; exit 1; }; "
+        // Файл открывает основной shell до запуска cat. После остановки shell дочерний cat
+        // может дописать только открытый FD, но не пересоздать уже удалённый путь.
         // Отменённая или неполная передача не должна перезаписывать существующий файл расширения.
-        return "trap \"rm -f '$temporary'\" EXIT; mkdir -p '$root' && [ ! -L '$dir' ] && mkdir -p '$dir' && " +
+        val command = "trap \"rm -f '$temporary'\" EXIT; mkdir -p '$root' && [ ! -L '$dir' ] && mkdir -p '$dir' && " +
             "[ \"\$(readlink -f '$dir')\" = \"\$(readlink -f '$root')/$packageName\" ] && " +
-            "[ ! -L '$path' ] && [ ! -d '$path' ] && ( $checkSpace set -C; cat > '$temporary' ) && " +
+            "[ ! -L '$path' ] && [ ! -d '$path' ] && { $checkSpace set -C; exec 3> '$temporary'; } && " +
+            "cat >&3 && exec 3>&- && " +
             "[ \"\$(wc -c < '$temporary')\" -eq $size ] && chmod 644 '$temporary' && mv -fT '$temporary' '$path' && echo Success"
+        return ObbCopyPlan(command, temporary, "rm -f -- '$temporary' && echo Success")
     }
 }
+
+internal fun obbFailureWarning(error: Exception): String = if (error is java.util.concurrent.CancellationException)
+    "APK установлен. Перенос OBB отменён. Используйте экспорт ZIP."
+else "APK установлен, но перенос или очистка OBB не завершены: ${error.message ?: "ошибка передачи"}. Используйте экспорт ZIP."
