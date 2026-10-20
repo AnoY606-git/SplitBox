@@ -39,14 +39,11 @@ class InstallResultReceiver : BroadcastReceiver() {
             if (status == PackageInstaller.STATUS_PENDING_USER_ACTION) {
                 val confirmation = intent.getParcelableExtra(Intent.EXTRA_INTENT, Intent::class.java)
                 if (confirmation != null) {
-                    val encoded = runCatching { InstallJournal.encodeIntent(confirmation) }.getOrNull()
-                    if (encoded != null) {
-                        journal.recordConfirmation(id, encoded)
-                        return
-                    }
+                    journal.recordConfirmation(id, confirmation)
+                    return
                 }
-                journal.recordResult(id, false, message("install_result_receiver_android_did_not_provide_a_usable_installation", "Android не передал пригодное подтверждение установки"))
-                runCatching { context.packageManager.packageInstaller.abandonSession(id) }
+                // Отсутствие подтверждения не доказывает окончательный отказ установки.
+                journal.markLaunchFailed(id)
                 return
             }
             val success = status == PackageInstaller.STATUS_SUCCESS

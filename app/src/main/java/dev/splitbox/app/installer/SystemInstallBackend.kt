@@ -9,6 +9,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageInstaller
+import android.content.pm.PackageManager
 import dev.splitbox.app.data.InstallJournal
 import dev.splitbox.app.data.PendingInstall
 import kotlinx.coroutines.Dispatchers
@@ -25,6 +26,10 @@ class SystemInstallBackend(private val context: Context, private val journal: In
             setAppPackageName(request.prepared.metadata.packageName)
             setSize(size)
             setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_REQUIRED)
+            // При обновлении сохраняем выбор пользователя, отключившего приложение.
+            setApplicationEnabledSettingPersistent()
+            // Системная подсказка о ручной установке, которую пользователь ожидает завершить.
+            setInstallScenario(PackageManager.INSTALL_SCENARIO_FAST)
         }
         val id = installer.createSession(params)
         var committed = false

@@ -31,7 +31,7 @@ jobs:
       - name: Установка закреплённых инструментов сборки
         run: python3 scripts/bootstrap.py --accept-licenses
       - name: Тесты, lint и неподписанный релиз
-        run: bash scripts/gradle.sh :core:test :app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:assembleRelease :fixture:assembleDebug
+        run: bash scripts/gradle.sh :core:test :app:testDebugUnitTest :app:lintDebug :app:lintRelease :app:assembleDebug :app:assembleDebugAndroidTest :app:assembleRelease :fixture:assembleDebug
       - name: Проверка APK и упаковка исходников
         run: |
           python3 scripts/check_repository.py --apk app/build/outputs/apk/release/app-release-unsigned.apk

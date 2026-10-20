@@ -53,6 +53,17 @@ class MainActivity : ComponentActivity() {
                 onExportObb = ::chooseObbDestination,
                 onRetrySave = viewModel::retrySelectionSave,
                 onLaunchIntent = { startActivity(it) },
+                onLaunchConfirmation = {
+                    val options = android.app.ActivityOptions.makeBasic().apply {
+                        // Android 14–15 поддерживают только прежний разрешающий режим отправителя.
+                        @Suppress("DEPRECATION")
+                        val mode = if (android.os.Build.VERSION.SDK_INT >= 36)
+                                android.app.ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOW_IF_VISIBLE
+                            else android.app.ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED
+                        setPendingIntentBackgroundActivityStartMode(mode)
+                    }
+                    startIntentSender(it, null, 0, 0, 0, options.toBundle())
+                },
                 onOpenShizuku = ::openShizuku,
                 onShizukuWebsite = ::openShizukuWebsite,
             )

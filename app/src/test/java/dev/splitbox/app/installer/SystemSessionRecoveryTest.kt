@@ -104,6 +104,88 @@ class SystemSessionRecoveryTest {
         val latest = SystemSessionLedger(current = expected).recordConfirmation(42, "new-intent")
         assertFalse(latest.isCurrent(expected))
     }
+    @Test fun replacementConfirmationWithEqualHashCannotReuseOldLaunchOrDeliveryToken() {
+        // Разные поколения могут иметь одинаковый String.hashCode; старый запуск должен устареть.
+        assertEquals("Aa".hashCode(), "BB".hashCode())
+        val original = session(42).copy(state = "CONFIRMATION", confirmation = "Aa")
+        val replacement = SystemSessionLedger(current = original).recordConfirmation(42, "BB")
+        val current = replacement.current!!
+        assertNotEquals(original.confirmationToken, current.confirmationToken)
+        assertFalse(replacement.isLaunchCurrent(original.confirmationToken))
+        assertTrue(replacement.isLaunchCurrent(current.confirmationToken))
+
+        val delivery = ConfirmationDelivery()
+        assertTrue(delivery.offer(original.confirmationToken))
+        delivery.acknowledge(original.confirmationToken, true)
+        assertTrue(delivery.offer(current.confirmationToken))
+    }
+    @Test fun lateConfirmationCannotResurrectFinishedCurrentOrRetainedSession() {
+        for (success in listOf(true, false)) {
+            val finished = SystemSessionLedger(current = session(42))
+                .recordConfirmation(42, "first-generation")
+                .recordResult(42, success, "Подтверждённый итог")
+            assertEquals(finished, finished.recordConfirmation(42, "late-generation"))
+            assertNull(finished.current!!.confirmation)
+            assertFalse(finished.isLaunchCurrent("late-generation"))
+
+            val retained = finished.begin(session(43))
+            assertEquals(retained, retained.recordConfirmation(42, "late-generation"))
+            assertEquals("FINISHED", retained.find(42)!!.state)
+            assertEquals(success, retained.find(42)!!.success)
+            assertNull(retained.find(42)!!.confirmation)
+            assertEquals(43, retained.current!!.sessionId)
+        }
+    }
+    @Test fun successfulCurrentAcknowledgementRestoresUnknownConfirmationWithoutReplacingPayload() {
+        val original = session(42).copy(state = "UNKNOWN", confirmation = "current-generation",
+            message = "Системное окно не открылось")
+        val acknowledged = SystemSessionLedger(current = original)
+            .acknowledgeConfirmation(original.confirmationToken, true)
+        assertEquals("CONFIRMATION", acknowledged.current!!.state)
+        assertEquals(original.confirmation, acknowledged.current!!.confirmation)
+        assertEquals(original.confirmationToken, acknowledged.current!!.confirmationToken)
+        assertEquals(original.historyId, acknowledged.current!!.historyId)
+        assertNull(acknowledged.current!!.success)
+        assertTrue(acknowledged.retained.isEmpty())
+    }
+    @Test fun failedCurrentAcknowledgementKeepsConfirmationForRetryWithoutInventingResult() {
+        val original = session(42).copy(state = "CONFIRMATION", confirmation = "current-generation")
+        val acknowledged = SystemSessionLedger(current = original)
+            .acknowledgeConfirmation(original.confirmationToken, false)
+        assertEquals("UNKNOWN", acknowledged.current!!.state)
+        assertEquals(original.confirmation, acknowledged.current!!.confirmation)
+        assertEquals(original.confirmationToken, acknowledged.current!!.confirmationToken)
+        assertTrue(acknowledged.current!!.message.isNotBlank())
+        assertNull(acknowledged.current!!.success)
+        assertTrue(acknowledged.completedRecords.isEmpty())
+    }
+    @Test fun staleAcknowledgementCannotChangeReplacementConfirmationGeneration() {
+        // Между получением token A и ответом UI Android успевает прислать подтверждение B.
+        val original = session(42).copy(state = "UNKNOWN", confirmation = "generation-A")
+        val replacement = SystemSessionLedger(current = original).recordConfirmation(42, "generation-B")
+        val replacementAwaitingRetry = replacement.markUnknown(42, "Ошибка запуска B", true)
+        for (latest in listOf(replacement, replacementAwaitingRetry)) {
+            for (launched in listOf(true, false)) {
+                assertEquals("Поздний ack A не должен менять состояние или payload поколения B", latest,
+                    latest.acknowledgeConfirmation(original.confirmationToken, launched))
+            }
+        }
+    }
+    @Test fun acknowledgementCannotResurrectFinishedOrArchivedConfirmation() {
+        val original = session(42).copy(state = "UNKNOWN", confirmation = "old-generation")
+        for (success in listOf(true, false)) {
+            val finished = SystemSessionLedger(current = original).recordResult(42, success, "Итог Android")
+            for (latest in listOf(finished, finished.begin(session(43)))) {
+                for (launched in listOf(true, false)) {
+                    assertEquals(latest, latest.acknowledgeConfirmation(original.confirmationToken, launched))
+                }
+            }
+        }
+        val archived = SystemSessionLedger(current = original).releaseUnknown().begin(session(43))
+        for (launched in listOf(true, false)) {
+            assertEquals(archived, archived.acknowledgeConfirmation(original.confirmationToken, launched))
+        }
+    }
     @Test fun sessionIdReuseWithDifferentCreationCannotAcceptOldContinuation() {
         val expected = session(42)
         val latest = SystemSessionLedger(current = expected.copy(createdAt = 9999L))

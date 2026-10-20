@@ -28,7 +28,7 @@ data class PendingInstall(
 ) {
     val blocksNewOperation: Boolean get() = state != "UNKNOWN"
     val historyId: String get() = "system:$sessionId:$createdAt"
-    val confirmationToken: String get() = "$sessionId:$createdAt:${confirmation?.hashCode() ?: 0}"
+    val confirmationToken: String get() = "$sessionId:$createdAt:$confirmation"
 }
 /** Ограниченный журнал связей отделяет поздние итоговые ответы от новой активной операции. */
 data class SystemSessionLedger(val current: PendingInstall? = null, val retained: List<PendingInstall> = emptyList()) {
@@ -55,6 +55,14 @@ data class SystemSessionLedger(val current: PendingInstall? = null, val retained
         if (it.state == "FINISHED") this else replace(it.copy(state = "CONFIRMATION", confirmation = encodedIntent,
             message = message("split_box_view_model_confirm_installation_in_the_system_dialog", "Подтвердите установку в системном окне")))
     } ?: this
+    fun markConfirmationLaunchFailed(id: Int): SystemSessionLedger = markUnknown(id,
+        message("install_journal_the_system_dialog_did_not_open_tap", "Системное окно не открылось. Нажмите «Проверить статус», чтобы повторить запуск, или выберите другой файл. Результат установки пока не подтверждён."), true)
+    fun acknowledgeConfirmation(token: String, launched: Boolean): SystemSessionLedger {
+        if (!isLaunchCurrent(token)) return this
+        val record = current ?: return this
+        if (!launched) return markConfirmationLaunchFailed(record.sessionId)
+        return if (record.state == "UNKNOWN") recordConfirmation(record.sessionId, record.confirmation!!) else this
+    }
     fun recordResult(id: Int, success: Boolean, message: String): SystemSessionLedger = find(id)?.let {
         if (it.state == "FINISHED") this else replace(it.copy(state = "FINISHED", success = success, message = message, confirmation = null))
     } ?: this

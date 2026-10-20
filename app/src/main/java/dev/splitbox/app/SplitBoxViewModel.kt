@@ -594,25 +594,24 @@ class SplitBoxViewModel(application: Application) : AndroidViewModel(application
     private suspend fun offerConfirmation(value: PendingInstall) {
         if (mutableEvents.subscriptionCount.value == 0 || !journal.isCurrent(value) || !journal.isLaunchCurrent(value.confirmationToken)) return
         val raw = value.confirmation ?: return
-        val intent = runCatching { InstallJournal.decodeIntent(raw) }.getOrElse {
-            if (journal.isCurrent(value)) journal.markLaunchFailed(value.sessionId)
+        val sender = runCatching { journal.confirmationSender(value.sessionId, raw) }.getOrNull()
+        if (sender == null) {
+            journal.acknowledgeConfirmation(value.confirmationToken, false)
             return
         }
         try { journal.flush() }
         catch (e: Exception) { message(message("split_box_view_model_android_confirmation_was_not_saved_free_up", "Подтверждение Android не сохранено: %1\$s. Освободите место и проверьте статус снова.", nestedMessage(e.message))); return }
         if (mutableEvents.subscriptionCount.value == 0 || !journal.isCurrent(value) ||
             !journal.isLaunchCurrent(value.confirmationToken) || !confirmationDelivery.offer(value.confirmationToken)) return
-        mutableEvents.emit(UiEvent.LaunchIntent(intent, value.confirmationToken))
+        mutableEvents.emit(UiEvent.LaunchConfirmation(sender, value.confirmationToken))
     }
     /** UI проверяет актуальность перед startActivity, чтобы отбросить устаревшее подтверждение из очереди. */
     fun isIntentLaunchCurrent(token: String): Boolean = journal.isLaunchCurrent(token)
     /** UI вызывает сразу после успешного startActivity либо передаёт false при исключении запуска. */
     fun acknowledgeIntentLaunch(token: String, launched: Boolean) {
         if (!isIntentLaunchCurrent(token)) return
-        val record = journal.read()?.takeIf { it.confirmationToken == token && it.state != "FINISHED" } ?: return
         confirmationDelivery.acknowledge(token, launched)
-        if (!launched) journal.markLaunchFailed(record.sessionId)
-        else if (record.state == "UNKNOWN") journal.write(record.copy(state = "CONFIRMATION", message = message("split_box_view_model_confirm_installation_in_the_system_dialog", "Подтвердите установку в системном окне")))
+        journal.acknowledgeConfirmation(token, launched)
     }
     private suspend fun restoreReadyPackage() {
         fun idleForRestore(): Boolean = mutableUi.value.phase == OperationPhase.IDLE && operation?.isActive != true &&

@@ -8,8 +8,6 @@ import dev.splitbox.core.nestedMessage
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
-import android.os.Parcel
-import android.util.Base64
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -20,6 +18,8 @@ import org.json.JSONObject
 class InstallJournal private constructor(context: Context) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val lock = Any()
+    private val confirmations = ConfirmationIntentStore(context)
+    private val obsoleteConfirmations = mutableSetOf<Pair<Int, String>>()
     @Volatile private var snapshot = InstallJournalSnapshot()
     @Volatile private var loaded = false
     private lateinit var prefs: SharedPreferences
@@ -58,6 +58,7 @@ class InstallJournal private constructor(context: Context) {
         check(loaded) { message("install_journal_the_installation_log_is_still_loading", "Журнал установки ещё загружается") }
         val next = transform(snapshot)
         if (next != snapshot) {
+            obsoleteConfirmations += confirmationHandles(snapshot.ledger) - confirmationHandles(next.ledger)
             snapshot = next
             writes.submit(next)
             publish(next.ledger)
@@ -73,15 +74,29 @@ class InstallJournal private constructor(context: Context) {
             putString("resumeSource", value.permission?.first).putString("resumeName", value.permission?.second)
                 .putString("resumeDirectory", value.permission?.third)
         }
+        synchronized(lock) {
+            // Отмена допустима только после записи состояния, которое больше не использует токен.
+            val referenced = confirmationHandles(value.ledger) + confirmationHandles(snapshot.ledger)
+            obsoleteConfirmations.filterNot { it in referenced }.forEach { (id, token) ->
+                confirmations.cancel(id, token)
+                obsoleteConfirmations.remove(id to token)
+            }
+        }
     }
     fun write(value: PendingInstall) = mutate { ledger ->
         val previous = ledger.find(value.sessionId)
         when { previous == null -> ledger.begin(value); previous.state == "FINISHED" -> ledger; else -> ledger.replace(value) }
     }
     fun markMissing(sessionId: Int) = mutate { it.missingSession(sessionId) }
-    fun markLaunchFailed(sessionId: Int) = mutate { it.markUnknown(sessionId,
-        message("install_journal_the_system_dialog_did_not_open_tap", "Системное окно не открылось. Нажмите «Проверить статус», чтобы повторить запуск, или выберите другой файл. Результат установки пока не подтверждён."), true) }
-    fun recordConfirmation(sessionId: Int, encodedIntent: String) = mutate { it.recordConfirmation(sessionId, encodedIntent) }
+    fun markLaunchFailed(sessionId: Int) = mutate { it.markConfirmationLaunchFailed(sessionId) }
+    fun acknowledgeConfirmation(token: String, launched: Boolean) = mutate { it.acknowledgeConfirmation(token, launched) }
+    fun recordConfirmation(sessionId: Int, intent: Intent) = synchronized(lock) {
+        val stored = find(sessionId) ?: return
+        if (stored.state == "FINISHED") return
+        val token = confirmations.save(sessionId, intent)
+        mutate { it.recordConfirmation(sessionId, token) }
+    }
+    fun confirmationSender(sessionId: Int, token: String) = confirmations.resolve(sessionId, token)?.intentSender
     fun recordResult(sessionId: Int, success: Boolean, message: String) = mutate { it.recordResult(sessionId, success, message) }
     fun consume(sessionId: Int) = mutate { it.consume(sessionId) }
     fun detachUnknown() = mutate { it.releaseUnknown() }
@@ -117,16 +132,9 @@ class InstallJournal private constructor(context: Context) {
             .put("saveHistory", value.saveHistory).put("state", value.state).put("success", value.success ?: JSONObject.NULL)
             .put("message", value.message).put("confirmation", value.confirmation ?: JSONObject.NULL)
             .put("obbWarning", value.obbWarning ?: JSONObject.NULL)
-        fun encodeIntent(intent: Intent): String {
-            val parcel = Parcel.obtain()
-            return try { intent.writeToParcel(parcel, 0); Base64.encodeToString(parcel.marshall(), Base64.NO_WRAP) }
-            finally { parcel.recycle() }
-        }
-        fun decodeIntent(value: String): Intent {
-            val bytes = Base64.decode(value, Base64.NO_WRAP)
-            val parcel = Parcel.obtain()
-            return try { parcel.unmarshall(bytes, 0, bytes.size); parcel.setDataPosition(0); Intent.CREATOR.createFromParcel(parcel) }
-            finally { parcel.recycle() }
-        }
+        private fun confirmationHandles(ledger: SystemSessionLedger): Set<Pair<Int, String>> =
+            (listOfNotNull(ledger.current) + ledger.retained).mapNotNull { record ->
+                record.confirmation?.let { record.sessionId to it }
+            }.toSet()
     }
 }

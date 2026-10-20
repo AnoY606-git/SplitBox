@@ -88,6 +88,7 @@ fun SplitBoxApp(
     onChooseApks: () -> Unit,
     onExportObb: (String) -> Unit,
     onLaunchIntent: (Intent) -> Unit,
+    onLaunchConfirmation: (android.content.IntentSender) -> Unit,
     onOpenShizuku: () -> Unit,
     onShizukuWebsite: () -> Unit,
     onRetrySave: () -> Unit = {},
@@ -117,6 +118,21 @@ fun SplitBoxApp(
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             viewModel.events.collect { event ->
                 when (event) {
+                    is UiEvent.LaunchConfirmation -> {
+                        val token = event.acknowledgementToken
+                        if (!viewModel.isIntentLaunchCurrent(token)) return@collect
+                        val launched = try {
+                            onLaunchConfirmation(event.sender)
+                            true
+                        } catch (_: android.content.IntentSender.SendIntentException) {
+                            false
+                        } catch (_: ActivityNotFoundException) {
+                            false
+                        } catch (_: SecurityException) {
+                            false
+                        }
+                        viewModel.acknowledgeIntentLaunch(token, launched)
+                    }
                     is UiEvent.LaunchIntent -> try {
                         val token = event.acknowledgementToken
                         if (token != null && !viewModel.isIntentLaunchCurrent(token)) return@collect

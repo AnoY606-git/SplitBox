@@ -54,5 +54,6 @@ enum class NoticeAction { CHOOSE_FILE, RETRY_SAVE }
 data class AppNotice(val text: String, val action: NoticeAction? = null)
 sealed interface UiEvent {
     data class LaunchIntent(val intent: Intent, val acknowledgementToken: String? = null) : UiEvent
+    data class LaunchConfirmation(val sender: android.content.IntentSender, val acknowledgementToken: String) : UiEvent
     data class Message(val text: String) : UiEvent
 }
