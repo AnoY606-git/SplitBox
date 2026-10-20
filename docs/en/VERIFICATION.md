@@ -2,7 +2,21 @@
 
 # Verification record
 
-Checks of the 1.2.1 release APK appear first with its exact SHA-256. Historical results for published APKs, including 1.2, and Settings development before the version increase remain separate below. Old hashes and Android results are not assigned to the new artifact.
+Current unreleased lint fixes appear first, followed by checks of the 1.2.1 release APK with its exact SHA-256. Historical results for published APKs, including 1.2, and Settings development before the version increase remain separate below. Old hashes and Android results are not assigned to the new artifact.
+
+# Lint fixes after 1.2.1 — unreleased sources
+
+Date: **20 October 2026**. The version remains **1.2.1 / code 8**; the published release is unchanged. Local signed APK SHA-256: **`e629a5fca131d95497c2d25aeb324a30eae200a0728326e38c72241cc2fb9362`**. Android scenarios in this section used the debug APK from the same sources, not this signed APK.
+
+A clean `:app:clean :app:testDebugUnitTest :app:lintDebug :app:lintRelease :app:assembleDebug` run succeeded. Debug and release lint: **0 errors / 0 warnings**, down from 11. Separate `:core:test`, signed `:app:assembleRelease`, and fixture builds passed. JVM: **281 tests** (core 100, app 181), **0** failures/errors/skipped. All **13 Python tests** passed.
+
+- Two `UseKtx` recommendations for the journal and history require an exception: KTX `edit(commit = true)` discards the `commit()` result. A small `commitChecked` helper preserves the result check with one explained, local `@SuppressLint("UseKtx")`; there are no global disables or lint baselines. A regression test fails when `false` is ignored and passes with checked persistence. The other four KTX recommendations were applied directly.
+- `StatFs.availableBytes` is refreshed with `restat()` before checking a write; the object is reused within an operation. The policy retains currently available space and the 64 MiB reserve. Cache that the system might delete is excluded from the budget because prepared APKs are themselves cached. The per-chunk space check for an APK set is injected explicitly; tests cover checks across file boundaries, closing the stream, and deleting the partial working directory on insufficient space.
+- Adaptive icon XML files moved unchanged from `mipmap-anydpi-v26` to `mipmap-anydpi`; minSdk remains 34. A clean resource build verified the move.
+
+On a separate project-owned AOSP API 34 x86_64 AVD, an APKS containing a signed fixture (one APK, 10.4 KiB) was imported and installed through System. Before Android confirmation, the on-disk journal contained state `CONFIRMATION`; after installation, the installed package and successful on-disk history were checked after a cold restart. A separate UI theme change verified that ordinary KTX `apply()` retained the dark theme after a cold restart. The crash buffer was empty. Independent Astra review found no confirmed regressions in the reviewed diff. This was not a new large-file stress run or a physical-device check.
+
+---
 
 # SplitBox 1.2.1 verification
 
