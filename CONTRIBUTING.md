@@ -1,3 +1,5 @@
+[English](docs/en/CONTRIBUTING.md) · **Русский**
+
 # Участие в разработке
 
 Начните с [путеводителя](docs/README.md) и [сборки](docs/BUILDING.md). Изменения собственного кода распространяются под GPL-3.0-only; сохраняйте применимые copyright/NOTICE и лицензии зависимостей. Авторство проекта — в [AUTHORS](AUTHORS.md).

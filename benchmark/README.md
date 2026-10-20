@@ -1,5 +1,7 @@
 <!-- Copyright (C) 2026 AnoY606-git and SplitBox contributors
      SPDX-License-Identifier: GPL-3.0-only -->
+[English](../docs/en/BENCHMARKING.md) · **Русский**
+
 # Измерения SplitBox
 
 Модуль `:benchmark` использует `com.android.test` и официальный

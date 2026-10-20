@@ -1,111 +1,113 @@
+[**English**](README.md) · [Русский](README.ru.md)
+
 <div align="center">
 
 # SplitBox
 
-### Все части приложения — одна установка.
+### Every part of an app. One installation.
 
-Установщик **APK · APKS · XAPK · APKM** для Android 14+.<br>
-Выбирайте нужные части приложения и устанавливайте их через **System, Root или Shizuku**.
+An **APK · APKS · XAPK · APKM** installer for Android 14+.<br>
+Choose the app components you need and install them through **System, Root, or Shizuku**.
 
-[![Версия](https://img.shields.io/github/v/release/AnoY606-git/SplitBox?style=flat-square&color=55bfae&label=версия)](https://github.com/AnoY606-git/SplitBox/releases/latest)
-[![Android 14+](https://img.shields.io/badge/Android-14%2B-55bfae?style=flat-square&logo=android&logoColor=white)](#установка)
-[![GPL-3.0-only](https://img.shields.io/badge/лицензия-GPL--3.0--only-55bfae?style=flat-square)](LICENSE)
-[![Проверки](https://github.com/AnoY606-git/SplitBox/actions/workflows/ci.yml/badge.svg)](https://github.com/AnoY606-git/SplitBox/actions/workflows/ci.yml)
+[![Version](https://img.shields.io/github/v/release/AnoY606-git/SplitBox?style=flat-square&color=55bfae&label=version)](https://github.com/AnoY606-git/SplitBox/releases/latest)
+[![Android 14+](https://img.shields.io/badge/Android-14%2B-55bfae?style=flat-square&logo=android&logoColor=white)](#installation)
+[![GPL-3.0-only](https://img.shields.io/badge/license-GPL--3.0--only-55bfae?style=flat-square)](LICENSE)
+[![Checks](https://github.com/AnoY606-git/SplitBox/actions/workflows/ci.yml/badge.svg)](https://github.com/AnoY606-git/SplitBox/actions/workflows/ci.yml)
 
-**[Скачать APK](https://github.com/AnoY606-git/SplitBox/releases/latest)** · [Что нового](CHANGELOG.md) · [Сообщить об ошибке](https://github.com/AnoY606-git/SplitBox/issues/new/choose) · [Документация](docs/README.md)
+**[Download APK](https://github.com/AnoY606-git/SplitBox/releases/latest)** · [What's new](CHANGELOG.md) · [Report a bug](https://github.com/AnoY606-git/SplitBox/issues/new/choose) · [Documentation](docs/en/README.md)
 
-**Без рекламы, аккаунтов и аналитики. Обработка файлов — на устройстве.**
+**No ads, accounts, or analytics. Files are processed on your device.**
 
 </div>
 
 ---
 
-SplitBox помогает установить приложение, которое скачалось архивом или набором APK. Откройте файл, проверьте выбранные части и подтвердите установку — распаковывать архив вручную не требуется.
+SplitBox installs apps downloaded as an archive or a set of APKs. Open a file, review the selected components, and confirm installation. There is no need to unpack the archive yourself.
 
-## Как это выглядит
+## Screenshots
 
 <p align="center">
-  <img src="docs/images/home.png" width="230" alt="Главный экран: выбор файла и способа установки" />
-  <img src="docs/images/prepared-apks.png" width="230" alt="Подготовленный пакет: выбор совместимых частей приложения" />
-  <img src="docs/images/package-inspector.png" width="230" alt="Сведения о пакете: версии и запрашиваемые разрешения" />
+  <img src="docs/images/home.png" width="230" alt="Home screen: choose a file and installation method" />
+  <img src="docs/images/prepared-apks.png" width="230" alt="Prepared package: choose compatible app components" />
+  <img src="docs/images/package-inspector.png" width="230" alt="Package information: versions and requested permissions" />
 </p>
 
-<p align="center"><sub>Выбор файлов · Подготовка пакета · Сведения до установки</sub></p>
+<p align="center"><sub>Choose files · Prepare a package · Inspect before installing</sub></p>
 
-## Возможности
+## Features
 
-- **Один архив или несколько APK.** Через системный диалог, «Открыть с помощью» или «Поделиться» из проводника. Отдельные части одного приложения можно выбрать вместе, без упаковки в ZIP.
-- **Контроль над частями приложения.** Автоматический подбор совместимых APK, ручной выбор, группы, поиск и фильтр выбранных. Поддерживаются наборы bundletool с `toc.pb`.
-- **Проверки перед установкой.** Подписи, SHA-256, версия Android, архитектура устройства и совместимость частей пакета.
-- **Три способа установки.** Системное подтверждение Android, Root или Shizuku — способ выбираете вы. Доступ Root/Shizuku проверяется автоматически при выборе режима.
-- **Сведения до установки.** Сравнение с установленной версией и просмотр разрешений, объявленных выбранными APK.
-- **Понятный ход операции.** Прогресс импорта, сохранение выбора и повтор при ошибке его сохранения. В истории есть поиск, фильтры по результату и способу установки, копирование отчёта.
-- **Работа с OBB.** Экспорт дополнительных файлов и опциональный перенос через Root/Shizuku.
-- **Оформление под себя.** Русский и английский интерфейс, выбор языка приложения, светлая, тёмная и системная темы, динамические цвета Material 3.
-- **Локальная работа.** Приложение не запрашивает разрешение INTERNET. Временные файлы можно удалить в настройках.
+- **One archive or several APKs.** Import through the system picker, “Open with,” or “Share” in a file manager. Select separate components of the same app together without creating a ZIP.
+- **Control over app components.** Automatic selection of compatible APKs, manual selection, groups, search, and a selected-only filter. Bundletool sets with `toc.pb` are supported.
+- **Checks before installation.** Signatures, SHA-256, Android version, device architecture, and compatibility between package components.
+- **Three installation methods.** Android's system confirmation, Root, or Shizuku: you choose the method. Root/Shizuku access is checked automatically when you select that mode.
+- **Inspect before installing.** Compare with the installed version and view permissions declared by the selected APKs.
+- **Clear operation status.** Import progress, saved selections, and retry when saving fails. History includes search, filters by outcome and installation method, and a report you can copy.
+- **OBB support.** Export additional files or explicitly enable transfer through Root/Shizuku.
+- **Appearance and language.** English and Russian interfaces, per-app language selection, light, dark, and system themes, and Material 3 dynamic colors.
+- **Local processing.** The app does not request the INTERNET permission. Temporary files can be deleted in Settings.
 
-## Установка
+## Installation
 
-1. Откройте [последний релиз](https://github.com/AnoY606-git/SplitBox/releases/latest) и скачайте APK из раздела **Assets** (для версии 1.2 — **`SplitBox-1.2.apk`**).
-2. Установите APK на устройство с **Android 14 или новее**.
-3. Запустите SplitBox, выберите файл и проверьте состав пакета перед установкой.
+1. Open the [latest release](https://github.com/AnoY606-git/SplitBox/releases/latest) and download the APK from **Assets** (**`SplitBox-1.2.apk`** for version 1.2).
+2. Install the APK on a device running **Android 14 or later**.
+3. Open SplitBox, choose a file, and review the package components before installing.
 
-### Если APK лежат отдельно
+### When the APKs are separate files
 
-Нажмите **«Выбрать несколько APK»** и отметьте базовый APK вместе с нужными частями того же приложения. Можно выбрать до 128 файлов; их пакет, числовая версия и подписи должны совпадать. SplitBox сам подберёт совместимые части, а поиск поможет найти нужный язык или модуль. Для нескольких разных приложений выполняйте установки по очереди.
+Tap **“Choose multiple APKs”** and select the base APK together with the required components of the same app. You can select up to 128 files; their package name, numeric version, and signatures must match. SplitBox selects compatible components automatically, and search helps you find a language or module. Install different apps one at a time.
 
-В **«Сведениях о пакете»** можно посмотреть номера новой и установленной версий и объявления разрешений. Android может скрывать сведения об установленных пакетах; в этом случае SplitBox показывает, что сравнение недоступно. Список объявленных разрешений не означает, что они выданы приложению.
+**Package details** shows the incoming and installed version numbers and permission declarations. Android may hide information about installed packages; SplitBox then reports that comparison is unavailable. Declared permissions do not mean those permissions have been granted to the app.
 
-### Какой способ выбрать
+### Choosing an installation method
 
-| Способ | Что понадобится | Как проходит установка |
+| Method | Requirements | Installation flow |
 | --- | --- | --- |
-| **System** | Разрешение Android на установку приложений из SplitBox | Через стандартное системное подтверждение; Root не нужен |
-| **Shizuku** | [Запущенный Shizuku](https://shizuku.rikka.app/download/) и доступ для SplitBox | Через сервис Shizuku |
-| **Root** | Рабочий `su` и разрешение в root manager | С правами суперпользователя |
+| **System** | Android permission to install apps from SplitBox | Standard system confirmation; Root is not required |
+| **Shizuku** | [Running Shizuku](https://shizuku.rikka.app/download/) and access granted to SplitBox | Through the Shizuku service |
+| **Root** | Working `su` and permission in your root manager | With superuser privileges |
 
-После выбора Root приложение проверит `su` и может вызвать запрос менеджера доступа. Для Shizuku автоматически проверяются запущенная служба и разрешение. После отказа запрос не повторяется по кругу: повторите его кнопкой в настройках. Если доступ заблокирован в Shizuku, разрешите его в самом Shizuku. Автоматического переключения между способами установки нет.
+Selecting Root checks `su` and may trigger your root manager's permission prompt. For Shizuku, SplitBox automatically checks the running service and permission. A denial does not start a repeating prompt: retry explicitly with the button in Settings. If access is blocked in Shizuku, allow it in Shizuku itself. SplitBox does not switch installation methods automatically.
 
-В настройках доступен язык **«Как в системе / Русский / English»**. Переключение меняет интерфейс приложения; языковые части APK по-прежнему подбираются по языкам устройства.
+Settings offers **“Follow system / Russian / English.”** This changes the app interface; language APK components are still selected using the device's system languages.
 
 <details>
-<summary><b>Если раньше была установлена предварительная dev-сборка</b></summary>
+<summary><b>If you previously installed a development preview</b></summary>
 
-Публичные релизы подписываются постоянным ключом издателя. У предварительной `-dev.apk` другой сертификат, поэтому Android не примет обычное обновление поверх неё. Сохраните нужные данные и удалите предварительную сборку вручную перед установкой публичной версии.
+Public releases use a permanent publisher signing key. An earlier `-dev.apk` uses a different certificate, so Android will reject a normal update over it. Save any data you need and manually uninstall the preview before installing the public release.
 
 </details>
 
-## Совместимость
+## Compatibility
 
-SplitBox поддерживает APK и открытые ZIP-контейнеры APKS, XAPK и APKM с APK внутри. Поддерживается single-disk ZIP64, в том числе большие APKS. **AAB напрямую, зашифрованные и многотомные архивы, asset packs не поддерживаются.** Подписи входных APK сохраняются; ограничения Android и производителя устройства продолжают действовать.
+SplitBox supports APKs and unencrypted APKS, XAPK, and APKM ZIP containers containing APKs. Single-disk ZIP64 is supported, including large APKS files. **Direct AAB installation, encrypted and multipart archives, and asset packs are not supported.** Input APK signatures are preserved; Android and device manufacturer restrictions still apply.
 
-System не переносит OBB в каталог другого приложения: для этого предусмотрены экспорт или явная опция Root/Shizuku.
+System cannot transfer OBB files into another app's directory. Use export or the explicit Root/Shizuku option for that.
 
-В сборке 1.1.1 на AOSP Android 14 проверены обновление с 1.1, APK на 400 МиБ с 6008 ZIP-записями, полный импорт и установка APKS больше 9 ГиБ через System и Shizuku, отмена распаковки и восстановление после нехватки места/завершения процесса. Реальные Magisk/KernelSU, физические ARM-устройства и Android 15/16 пока требуют проверки. Подробные сценарии и границы испытаний — в [отчёте о проверках](docs/VERIFICATION.md).
+Version 1.1.1 was tested on AOSP Android 14 for an update from 1.1, a 400 MiB APK with 6,008 ZIP entries, full import and installation of an APKS larger than 9 GiB through System and Shizuku, extraction cancellation, and recovery after insufficient storage or process death. Real Magisk/KernelSU, physical ARM devices, and Android 15/16 still require testing. These large-payload device runs were not repeated for 1.2. See the [verification report](docs/en/VERIFICATION.md) for the scenarios completed in each version and their limits.
 
-## Помочь проекту
+## Contributing
 
-Нашли ошибку или хотите предложить улучшение? [Создайте issue](https://github.com/AnoY606-git/SplitBox/issues/new/choose). Для ошибки укажите модель устройства, версию Android, способ установки и шаги воспроизведения. Не прикладывайте личные данные и чужие закрытые APK.
+Found a bug or have an idea? [Create an issue](https://github.com/AnoY606-git/SplitBox/issues/new/choose). For bugs, include the device model, Android version, installation method, and reproduction steps. Do not attach personal data or someone else's private APKs.
 
-Изменения кода приветствуются — начните с [руководства для участников](CONTRIBUTING.md). Об уязвимостях сообщайте по [инструкции безопасности](SECURITY.md).
+Code contributions are welcome; start with the [contributor guide](docs/en/CONTRIBUTING.md). Report vulnerabilities according to the [security policy](docs/en/SECURITY.md).
 
-## Разработчику
+## For developers
 
-Проект написан на **Kotlin**, интерфейс — **Jetpack Compose / Material 3**. Разбор пакетов вынесен в отдельное JVM-ядро. Текущий выпуск — **1.2**, `versionCode 7`, тег [v1.2](https://github.com/AnoY606-git/SplitBox/releases/tag/v1.2). Предыдущие версии сохранены в истории релизов.
+SplitBox uses **Kotlin** and **Jetpack Compose / Material 3**. Package parsing lives in a separate JVM core. The current release is **1.2**, `versionCode 7`, tag [v1.2](https://github.com/AnoY606-git/SplitBox/releases/tag/v1.2). Previous versions remain in the release history.
 
-| Документ | Что внутри |
+| Document | Contents |
 | --- | --- |
-| [Путеводитель](docs/README.md) | Структура проекта и точки входа в код |
-| [Сборка](docs/BUILDING.md) | Инструменты, Android Studio и локальный bootstrap |
-| [Архитектура](docs/ARCHITECTURE.md) | Установка, сохранение выбора и восстановление операций |
-| [Тестирование](docs/TESTING.md) | Автоматические проверки и сценарии на устройстве |
-| [Выпуск](docs/RELEASING.md) | Постоянная подпись, версия и упаковка |
-| [Измерения](benchmark/README.md) | Macrobenchmark и генерация Baseline Profile |
+| [Developer guide](docs/en/README.md) | Project structure and code entry points |
+| [Building](docs/en/BUILDING.md) | Tools, Android Studio, and local bootstrap |
+| [Architecture](docs/en/ARCHITECTURE.md) | Installation, selection persistence, and operation recovery |
+| [Testing](docs/en/TESTING.md) | Automated checks and device scenarios |
+| [Releasing](docs/en/RELEASING.md) | Permanent signing key, versions, and packaging |
+| [Benchmarks](docs/en/BENCHMARKING.md) | Macrobenchmark and Baseline Profile generation |
 
 <details>
-<summary><b>Быстрая сборка из исходников</b></summary>
+<summary><b>Quick source build</b></summary>
 
-Нужны JDK 17 и Android SDK: platform 36, build-tools 36.0.0, platform-tools. Укажите `JAVA_HOME` и `ANDROID_HOME` либо SDK path в локальном `local.properties`.
+Use JDK 17 and Android SDK platform 36, build-tools 36.0.0, and platform-tools. Set `JAVA_HOME` and `ANDROID_HOME`, or set the SDK path in a local `local.properties`.
 
 ```bash
 ./gradlew :core:test :app:testDebugUnitTest :app:lintDebug :app:lintRelease :app:assembleDebug :app:assembleRelease
@@ -113,16 +115,16 @@ python3 -m unittest discover -s scripts/tests -v
 python3 scripts/check_repository.py
 ```
 
-Для Windows используйте `gradlew.bat`. Debug APK находится в `app/build/outputs/apk/debug/app-debug.apk`. Release без настроенного ключа остаётся неподписанным: `app/build/outputs/apk/release/app-release-unsigned.apk`. Инструкции по подписи — в [порядке выпуска](docs/RELEASING.md).
+On Windows, use `gradlew.bat`. The debug APK is `app/build/outputs/apk/debug/app-debug.apk`. A release build without signing credentials remains unsigned: `app/build/outputs/apk/release/app-release-unsigned.apk`. See [Releasing](docs/en/RELEASING.md) for signing instructions.
 
 </details>
 
-## Лицензия и автор
+## License and author
 
-Разработчик — **[AnoY606-git](https://github.com/AnoY606-git)**. Собственный код SplitBox распространяется под **GPL-3.0-only**.
+Developed by **[AnoY606-git](https://github.com/AnoY606-git)**. SplitBox's own code is licensed under **GPL-3.0-only**.
 
-При распространении сохраняйте применимые уведомления об авторстве и лицензии и предоставляйте соответствующие исходники по GPL.
+When redistributing, retain the applicable copyright and license notices and provide the corresponding source code as required by the GPL.
 
 Copyright © 2026 AnoY606-git and SplitBox contributors.
 
-[Лицензия](LICENSE) · [Уведомления](NOTICE) · [Авторы](AUTHORS.md) · [Сохранение авторства](ATTRIBUTION.md) · [Сторонние компоненты](THIRD_PARTY_NOTICES.md)
+[License](LICENSE) · [Notices](NOTICE) · [Authors](docs/en/AUTHORS.md) · [Attribution](docs/en/ATTRIBUTION.md) · [Third-party components](THIRD_PARTY_NOTICES.md)
