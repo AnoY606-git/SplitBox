@@ -11,7 +11,7 @@ import struct
 import subprocess
 import zipfile
 
-ROOT_FILES = ('.editorconfig', '.gitattributes', '.gitignore', 'README.md', 'LICENSE', 'NOTICE',
+ROOT_FILES = ('.editorconfig', '.gitattributes', '.gitignore', 'README.md', 'README.ru.md', 'LICENSE', 'NOTICE',
               'AUTHORS.md', 'ATTRIBUTION.md', 'THIRD_PARTY_NOTICES.md', 'CONTRIBUTING.md',
               'SECURITY.md', 'CHANGELOG.md', 'settings.gradle.kts', 'build.gradle.kts',
               'gradle.properties', 'gradlew', 'gradlew.bat')

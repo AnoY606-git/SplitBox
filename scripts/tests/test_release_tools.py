@@ -85,6 +85,25 @@ class ReleaseToolsTest(unittest.TestCase):
             self.assertEqual(z.getinfo('SplitBox/gradlew').external_attr >> 16 & 0o777, 0o755)
             self.assertIn('SplitBox/.github/workflows/ci.yml', z.namelist())
 
+    def test_source_archive_keeps_both_readmes_and_their_linked_documentation(self):
+        documents = {
+            'README.md': '# SplitBox\n[Русский](README.ru.md)\n[Documentation](docs/en/README.md)\n',
+            'README.ru.md': '# SplitBox\n[English](README.md)\n[Документация](docs/README.md)\n',
+            'docs/en/README.md': '# Documentation\n',
+            'docs/README.md': '# Документация\n',
+        }
+        for name, content in documents.items():
+            path = self.root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(content, encoding='utf-8')
+        destination = self.root / 'source.zip'
+        source_archive(self.root, source_files(self.root), destination)
+        with zipfile.ZipFile(destination) as archive:
+            for name, content in documents.items():
+                entry = 'SplitBox/' + name
+                self.assertIn(entry, archive.namelist())
+                self.assertEqual(archive.read(entry), content.encode('utf-8'))
+
     def test_source_only_cli_packages_two_component_version_without_outputs_or_sdk(self):
         project = Path(__file__).resolve().parents[2]
         checkout = self.root / 'checkout'
