@@ -1,6 +1,6 @@
 # Путеводитель разработчика
 
-SplitBox 1.1.1 — Android-приложение с отдельным JVM-ядром. Для первой задачи достаточно собрать debug, пройти путь импорта собственного fixture и определить слой изменения по таблице ниже.
+SplitBox 1.2 — Android-приложение с отдельным JVM-ядром. Для первой задачи достаточно собрать debug, пройти путь импорта собственного fixture и определить слой изменения по таблице ниже.
 
 ## Порядок знакомства
 
@@ -22,6 +22,8 @@ SplitBox 1.1.1 — Android-приложение с отдельным JVM-ядр
 | Настройки/история | [SettingsScreen](../app/src/main/java/dev/splitbox/app/ui/SettingsScreen.kt), [HistoryScreen](../app/src/main/java/dev/splitbox/app/ui/HistoryScreen.kt) |
 | Сведения о версии и разрешениях | [PackageInspectorDialog](../app/src/main/java/dev/splitbox/app/ui/PackageInspectorDialog.kt), [PackageInspectionLoader](../app/src/main/java/dev/splitbox/app/inspector/PackageInspectionLoader.kt), [PermissionSnapshot](../app/src/main/java/dev/splitbox/app/data/PermissionSnapshot.kt) |
 | Фильтры и отчёт истории | [HistoryPresentation](../app/src/main/java/dev/splitbox/app/ui/HistoryPresentation.kt) |
+| Переводы и сохраняемые сообщения | [MessageEnvelope](../core/src/main/kotlin/dev/splitbox/core/MessageEnvelope.kt), [LocalizedText](../app/src/main/java/dev/splitbox/app/ui/LocalizedText.kt), [каталоги строк](../app/src/main/res/values/strings.xml) |
+| Автоматическая проверка Root/Shizuku | [AccessCoordinator](../app/src/main/java/dev/splitbox/app/installer/AccessCoordinator.kt) |
 | Модели UI и настроек | [Models](../app/src/main/java/dev/splitbox/app/model/Models.kt) |
 | Копирование URI, подписи и staging | [PackageStager](../app/src/main/java/dev/splitbox/app/data/PackageStager.kt), [SourceCopier](../app/src/main/java/dev/splitbox/app/data/SourceCopier.kt) |
 | Импорт нескольких APK | [ImportSelection](../app/src/main/java/dev/splitbox/app/data/ImportSelection.kt), [MultiApkStager](../app/src/main/java/dev/splitbox/app/data/MultiApkStager.kt), [PackageImporter](../app/src/main/java/dev/splitbox/app/data/PackageImporter.kt), [StagedApkPreparer](../core/src/main/kotlin/dev/splitbox/core/StagedApkPreparer.kt) |

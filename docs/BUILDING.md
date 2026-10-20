@@ -11,7 +11,7 @@
 | Android SDK | platform 36, build-tools 36.0.0, platform-tools |
 | Python | 3 для release scripts; 3.12+ для Linux bootstrap |
 
-Приложение: minSdk 34 / Android 14+, compile/target SDK 36. `gradle.properties` содержит единственный источник versionName/versionCode: сейчас `1.1.1` / `6`.
+Приложение: minSdk 34 / Android 14+, compile/target SDK 36. `gradle.properties` содержит единственный источник versionName/versionCode: сейчас `1.2` / `7`.
 
 ## С установленными JDK и SDK
 
