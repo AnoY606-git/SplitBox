@@ -56,9 +56,23 @@ internal fun LocalizedText(
     onTextLayout: ((TextLayoutResult) -> Unit)? = null,
     style: TextStyle = LocalTextStyle.current,
 ) = androidx.compose.material3.Text(
-    localizedText(text), modifier, color, fontSize, fontStyle, fontWeight, fontFamily,
-    letterSpacing, textDecoration, textAlign, lineHeight, overflow, softWrap, maxLines,
-    minLines, onTextLayout, style,
+    text = localizedText(text),
+    modifier = modifier,
+    color = color,
+    fontSize = fontSize,
+    fontStyle = fontStyle,
+    fontWeight = fontWeight,
+    fontFamily = fontFamily,
+    letterSpacing = letterSpacing,
+    textDecoration = textDecoration,
+    textAlign = textAlign,
+    lineHeight = lineHeight,
+    overflow = overflow,
+    softWrap = softWrap,
+    maxLines = maxLines,
+    minLines = minLines,
+    onTextLayout = onTextLayout,
+    style = style,
 )
 
 @Composable

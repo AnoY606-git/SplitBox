@@ -2,15 +2,14 @@
 // SPDX-License-Identifier: GPL-3.0-only
 plugins {
     id("com.android.test")
-    id("org.jetbrains.kotlin.android")
 }
 android {
     namespace = "dev.splitbox.benchmark"
-    compileSdk = 36
+    compileSdk = 37
     buildToolsVersion = "36.0.0"
     defaultConfig {
         minSdk = 34
-        targetSdk = 36
+        targetSdk = 37
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         testInstrumentationRunnerArguments["splitbox.iterations"] =
             providers.gradleProperty("splitbox.benchmarkIterations").orElse("5").get()
@@ -41,17 +40,5 @@ dependencies {
     implementation("androidx.test.ext:junit:1.2.1")
     implementation("androidx.test:runner:1.6.2")
     implementation("androidx.test.uiautomator:uiautomator:2.3.0")
-    implementation("androidx.core:core:1.16.0")
-}
-
-// AGP 8.13.2 не переносит атрибуты Android/Kotlin в TestedApks; Compose выбирает JVM stubs.
-configurations.matching { it.name in setOf("benchmarkTestedApks", "profileGenerationTestedApks") }.configureEach {
-    attributes.attribute(
-        org.jetbrains.kotlin.gradle.plugin.KotlinPlatformType.attribute,
-        org.jetbrains.kotlin.gradle.plugin.KotlinPlatformType.androidJvm,
-    )
-    attributes.attribute(
-        org.gradle.api.attributes.java.TargetJvmEnvironment.TARGET_JVM_ENVIRONMENT_ATTRIBUTE,
-        objects.named(org.gradle.api.attributes.java.TargetJvmEnvironment.ANDROID),
-    )
+    implementation("androidx.core:core:1.19.1")
 }

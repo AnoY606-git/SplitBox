@@ -839,6 +839,5 @@ class SplitBoxViewModel(application: Application) : AndroidViewModel(application
         Shizuku.removeBinderReceivedListener(receivedListener)
         Shizuku.removeBinderDeadListener(deadListener)
         Shizuku.removeRequestPermissionResultListener(permissionListener)
-        super.onCleared()
     }
 }

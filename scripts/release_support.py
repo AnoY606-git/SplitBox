@@ -176,7 +176,7 @@ def audit_apk(root, apk):
         raise ValueError('applicationId или версия APK не соответствуют этим исходникам')
     if metadata.get('versionCode') != str(version_code(root)):
         raise ValueError('versionCode APK не соответствует этим исходникам')
-    if "sdkVersion:'34'" not in badging or "targetSdkVersion:'36'" not in badging:
+    if "sdkVersion:'34'" not in badging or "targetSdkVersion:'37'" not in badging:
         raise ValueError('Версии SDK в APK не соответствуют требованиям проекта')
     permission_text = subprocess.run([str(aapt), 'dump', 'permissions', str(apk)], check=True, capture_output=True, text=True).stdout
     permissions = set(re.findall(r"uses-permission: name='([^']+)'", permission_text))

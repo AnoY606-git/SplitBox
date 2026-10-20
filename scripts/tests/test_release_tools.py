@@ -141,10 +141,27 @@ class ReleaseToolsTest(unittest.TestCase):
     def test_matching_version_name_cannot_hide_a_stale_version_code(self):
         (self.root / 'gradle.properties').write_text('splitbox.versionName=0.1.0\nsplitbox.versionCode=2\n')
         badging = "package: name='dev.splitbox.app' versionCode='1' versionName='0.1.0'\n" \
-                  "sdkVersion:'34'\ntargetSdkVersion:'36'\n"
+                  "sdkVersion:'34'\ntargetSdkVersion:'37'\n"
         with patch('release_support.subprocess.run', return_value=subprocess.CompletedProcess([], 0, badging)):
             with self.assertRaisesRegex(ValueError, 'versionCode'):
                 audit_apk(self.root, self.root / 'stale.apk')
+
+    def test_previous_target_sdk_is_rejected_even_with_matching_app_version(self):
+        (self.root / 'gradle.properties').write_text('splitbox.versionName=1.2.2\nsplitbox.versionCode=9\n')
+        badging = "package: name='dev.splitbox.app' versionCode='9' versionName='1.2.2'\n" \
+                  "sdkVersion:'34'\ntargetSdkVersion:'36'\n"
+        with patch('release_support.subprocess.run', return_value=subprocess.CompletedProcess([], 0, badging)):
+            with self.assertRaisesRegex(ValueError, 'Версии SDK'):
+                audit_apk(self.root, self.root / 'stale-target.apk')
+
+    def test_current_target_sdk_reaches_the_permission_audit(self):
+        (self.root / 'gradle.properties').write_text('splitbox.versionName=1.2.2\nsplitbox.versionCode=9\n')
+        badging = "package: name='dev.splitbox.app' versionCode='9' versionName='1.2.2'\n" \
+                  "sdkVersion:'34'\ntargetSdkVersion:'37'\n"
+        outputs = [subprocess.CompletedProcess([], 0, badging), subprocess.CompletedProcess([], 0, '')]
+        with patch('release_support.subprocess.run', side_effect=outputs):
+            with self.assertRaisesRegex(ValueError, 'Разрешения APK'):
+                audit_apk(self.root, self.root / 'current-target.apk')
 
     def test_non_positive_version_code_is_rejected(self):
         (self.root / 'gradle.properties').write_text('splitbox.versionName=0.1.0\nsplitbox.versionCode=0\n')
