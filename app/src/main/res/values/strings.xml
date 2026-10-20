@@ -653,4 +653,10 @@
     <string name="shizuku_launch_unavailable">Could not open Shizuku. Install or open it separately; the official website is available in Settings.</string>
     <string name="shizuku_website_unavailable">Could not open the Shizuku website. Open https://shizuku.rikka.app/download/ in a browser.</string>
     <string name="message_details_truncated">%1$s… [Details truncated]</string>
+    <string name="settings_group_installation">Installation</string>
+    <string name="settings_group_application">App</string>
+    <string name="settings_group_files">Files and data</string>
+    <string name="settings_theme">Theme</string>
+    <string name="settings_size_limit">Package size limit</string>
+    <string name="settings_size_limit_description">Auto uses available space with a reserve. A manual limit applies separately to the source and extracted data.</string>
 </resources>

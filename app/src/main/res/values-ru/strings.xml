@@ -653,4 +653,10 @@
     <string name="shizuku_launch_unavailable">Не удалось открыть Shizuku. Установите или откройте его отдельно; официальный сайт доступен в настройках.</string>
     <string name="shizuku_website_unavailable">Не удалось открыть сайт Shizuku. Откройте https://shizuku.rikka.app/download/ в браузере.</string>
     <string name="message_details_truncated">%1$s… [Подробности сокращены]</string>
+    <string name="settings_group_installation">Установка</string>
+    <string name="settings_group_application">Приложение</string>
+    <string name="settings_group_files">Файлы и данные</string>
+    <string name="settings_theme">Тема</string>
+    <string name="settings_size_limit">Лимит размера пакета</string>
+    <string name="settings_size_limit_description">Авто учитывает свободное место и резерв. Ручной лимит действует отдельно для исходника и распакованных данных.</string>
 </resources>

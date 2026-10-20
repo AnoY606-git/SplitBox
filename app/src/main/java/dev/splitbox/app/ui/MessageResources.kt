@@ -638,6 +638,12 @@ internal fun messageResource(key: String): Int? = when (key) {
     "zip_structure_zip_entry_data_is_outside_the_archive" -> R.string.zip_structure_zip_entry_data_is_outside_the_archive
     "zip_structure_local_zip_entry_and_directory_names_differ" -> R.string.zip_structure_local_zip_entry_and_directory_names_differ
     "zip_structure_local_zip_entry_size_or_crc_does" -> R.string.zip_structure_local_zip_entry_size_or_crc_does
+    "settings_group_installation" -> R.string.settings_group_installation
+    "settings_group_application" -> R.string.settings_group_application
+    "settings_group_files" -> R.string.settings_group_files
+    "settings_theme" -> R.string.settings_theme
+    "settings_size_limit" -> R.string.settings_size_limit
+    "settings_size_limit_description" -> R.string.settings_size_limit_description
     "settings_language" -> R.string.settings_language
     "settings_language_description" -> R.string.settings_language_description
     "settings_language_system" -> R.string.settings_language_system
