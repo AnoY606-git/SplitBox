@@ -20,7 +20,8 @@ internal class PackageImporter(private val stager: PackageStager) {
         onCopy(total, 0)
         val reporting = dev.splitbox.app.installer.TransferProgress(total) { bytes, _ -> onCopy(total, bytes) }
         val progress: (Long) -> Unit = reporting::report
-        val sourceBudget = PackageSizePolicy.copyBudget(options.maxExpandedBytes, directory.usableSpace)
+        val storage = AvailableStorage(directory)
+        val sourceBudget = PackageSizePolicy.copyBudget(options.maxExpandedBytes, storage.bytes())
         if (uris.size == 1) {
             val uri = uris.single()
             val name = stager.name(uri)
@@ -32,7 +33,9 @@ internal class PackageImporter(private val stager: PackageStager) {
             return PreparedImport(prepared, source, copied.sha256)
         }
         val staged = MultiApkStager.stage(uris, directory, sourceBudget, stager::name,
-            stager::openSource, cancelled, progress)
+            stager::openSource, cancelled, progress) { required ->
+            PackageSizePolicy.requireSpace(required, storage.bytes())
+        }
         onCopy(total, staged.fold(0L) { sum, entry -> Math.addExact(sum, entry.file.length()) })
         onAnalysis(message("package_importer_set_of_apks", "Набор из %1\$s APK", uris.size), null)
         val prepared = StagedApkPreparer().prepare(staged, directory, device, options, onAnalysis, cancelled)

@@ -357,7 +357,7 @@ class SplitBoxViewModel(application: Application) : AndroidViewModel(application
                     journal.flush()
                     mutableUi.update { it.copy(phase = OperationPhase.WAITING_USER, title = message("split_box_view_model_permission_required", "Требуется разрешение"), canCancel = true,
                         detail = message("split_box_view_model_allow_splitbox_to_install_apps_then_return", "Разрешите SplitBox устанавливать приложения и вернитесь назад")) }
-                    mutableEvents.emit(UiEvent.LaunchIntent(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${context.packageName}"))))
+                    mutableEvents.emit(UiEvent.LaunchIntent(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, "package:${context.packageName}".toUri())))
                     return@launch
                 }
                 journal.clearAwaitingPermission()
@@ -376,7 +376,7 @@ class SplitBoxViewModel(application: Application) : AndroidViewModel(application
                     }
                     // Исходник и распакованные данные уже занимают кэш; сессии Android нужна ещё одна копия APK.
                     val sessionBytes = selected.fold(0L) { sum, entry -> Math.addExact(sum, entry.size) }
-                    PackageSizePolicy.requireSpace(sessionBytes, prepared.workDir.usableSpace)
+                    PackageSizePolicy.requireSpace(sessionBytes, AvailableStorage(prepared.workDir).bytes())
                     if (options.verifySignatures) stager.verifySignatures(selected, Build.VERSION.SDK_INT) { !job.isActive }
                     if (options.backend != BackendMode.SYSTEM) {
                         tracker = PrivilegedOperationTracker(privilegedStore).also { it.begin(PrivilegedOperationRecord(

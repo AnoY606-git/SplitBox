@@ -65,14 +65,14 @@ class InstallJournal private constructor(context: Context) {
     }
     private fun mutate(transform: (SystemSessionLedger) -> SystemSessionLedger) = update { it.copy(ledger = transform(it.ledger)) }
     private fun persist(value: InstallJournalSnapshot) {
-        val editor = prefs.edit()
-        if (value.ledger.current == null) editor.remove("session")
-        else editor.putString("session", encode(value.ledger.current).toString())
-        editor.putString("retained", JSONArray().apply { value.ledger.retained.forEach { put(encode(it)) } }.toString())
-        editor.putString("preparedDirectory", value.prepared)
-        editor.putString("resumeSource", value.permission?.first).putString("resumeName", value.permission?.second)
-            .putString("resumeDirectory", value.permission?.third)
-        check(editor.commit()) { message("install_journal_could_not_save_the_installation_log_free", "Не удалось сохранить журнал установки. Освободите место и повторите сохранение.") }
+        prefs.commitChecked({ message("install_journal_could_not_save_the_installation_log_free", "Не удалось сохранить журнал установки. Освободите место и повторите сохранение.") }) {
+            if (value.ledger.current == null) remove("session")
+            else putString("session", encode(value.ledger.current).toString())
+            putString("retained", JSONArray().apply { value.ledger.retained.forEach { put(encode(it)) } }.toString())
+            putString("preparedDirectory", value.prepared)
+            putString("resumeSource", value.permission?.first).putString("resumeName", value.permission?.second)
+                .putString("resumeDirectory", value.permission?.third)
+        }
     }
     fun write(value: PendingInstall) = mutate { ledger ->
         val previous = ledger.find(value.sessionId)

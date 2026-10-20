@@ -8,6 +8,7 @@ import dev.splitbox.core.nestedMessage
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
+import androidx.core.net.toUri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -85,7 +86,7 @@ class MainActivity : ComponentActivity() {
     }
     private fun openShizukuWebsite() {
         try {
-            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://shizuku.rikka.app/download/")))
+            startActivity(Intent(Intent.ACTION_VIEW, "https://shizuku.rikka.app/download/".toUri()))
         } catch (_: ActivityNotFoundException) {
             reportShizukuWebsiteFailure()
         } catch (_: SecurityException) {

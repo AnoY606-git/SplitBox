@@ -18,7 +18,7 @@ class MultiApkStagerTest {
         val progress = mutableListOf<Long>()
         val opened = mutableListOf<Int>()
         val entries = MultiApkStager.stage(listOf(0, 1), dir, 6, { "../../same.apk" },
-            { opened += it; "abc".byteInputStream() }, { false }, progress::add)
+            { opened += it; "abc".byteInputStream() }, { false }, progress::add, {})
         assertEquals(listOf(0, 1), opened)
         assertEquals(listOf(3L, 6L), progress)
         assertEquals(2, entries.map { it.archivePath }.distinct().size)
@@ -28,7 +28,7 @@ class MultiApkStagerTest {
     }
     @Test fun actualBytesAcrossUnknownSizeSourcesEnforceBudgetAndCleanWorkDirectory() = fixture { dir ->
         assertThrows(IOException::class.java) {
-            MultiApkStager.stage(listOf(0, 1), dir, 5, { "app.apk" }, { "abc".byteInputStream() }, { false }, {})
+            MultiApkStager.stage(listOf(0, 1), dir, 5, { "app.apk" }, { "abc".byteInputStream() }, { false }, {}, {})
         }
         assertFalse(dir.exists())
     }
@@ -36,8 +36,31 @@ class MultiApkStagerTest {
         var cancelled = false
         assertThrows(CancellationException::class.java) {
             MultiApkStager.stage(listOf(0, 1), dir, Long.MAX_VALUE, { "app.apk" },
-                { if (it == 1) cancelled = true; "abc".byteInputStream() }, { cancelled }, {})
+                { if (it == 1) cancelled = true; "abc".byteInputStream() }, { cancelled }, {}, {})
         }
+        assertFalse(dir.exists())
+    }
+    @Test fun checksSpaceBeforeEveryChunkIncludingAcrossFiles() = fixture { dir ->
+        val checked = mutableListOf<Long>()
+        val entries = MultiApkStager.stage(listOf(0, 1), dir, 200_000, { "app.apk" },
+            { ByteArray(70_000).inputStream() }, { false }, {}, checked::add)
+        assertEquals(listOf(65_536L, 4_464L, 65_536L, 4_464L), checked)
+        assertEquals(140_000L, entries.sumOf { it.file.length() })
+    }
+    @Test fun spaceFailureClosesInputAndDeletesPartialWorkingDirectory() = fixture { dir ->
+        var closed = false
+        var checks = 0
+        val input = object : java.io.ByteArrayInputStream(ByteArray(70_000)) {
+            override fun close() { closed = true; super.close() }
+        }
+        val failure = InsufficientStorageException(4_464, 0)
+        val error = assertThrows(InsufficientStorageException::class.java) {
+            MultiApkStager.stage(listOf(0), dir, 100_000, { "app.apk" }, { input }, { false }, {}) {
+                if (++checks == 2) throw failure
+            }
+        }
+        assertSame(failure, error)
+        assertTrue(closed)
         assertFalse(dir.exists())
     }
     @Test fun normalizesExactUrisInOrderAndRejectsUnsupportedOrTooManyBeforeOpening() {

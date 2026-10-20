@@ -14,7 +14,8 @@ import java.util.concurrent.CancellationException
 /** Один проход по каждому источнику; каталог принадлежит только этой операции. */
 object MultiApkStager {
     fun <T> stage(sources: List<T>, workDir: File, maxBytes: Long, name: (T) -> String,
-        open: (T) -> InputStream, cancelled: () -> Boolean, progress: (Long) -> Unit): List<StagedApk> {
+        open: (T) -> InputStream, cancelled: () -> Boolean, progress: (Long) -> Unit,
+        checkSpace: (Long) -> Unit): List<StagedApk> {
         require(sources.size in 1..128) { message("multi_apk_stager_select_1_to_128_apks_for_a", "Выберите от 1 до 128 APK одного приложения") }
         require(maxBytes > 0) { message("multi_apk_stager_the_size_limit_must_be_positive", "Лимит размера должен быть положительным") }
         require(workDir.isDirectory && !Files.isSymbolicLink(workDir.toPath()) && workDir.listFiles()?.isEmpty() == true) {
@@ -30,9 +31,8 @@ object MultiApkStager {
                 val destination = File(workDir, "$prefix.apk")
                 check(destination.createNewFile()) { message("multi_apk_stager_the_temporary_file_already_exists", "Временный файл уже существует") }
                 val copied = open(source).use { input -> destination.outputStream().use { output ->
-                    val result = SourceCopier.copy(input, output, maxBytes - total, false, cancelled, { progress(total + it) }) { required ->
-                        PackageSizePolicy.requireSpace(required, workDir.usableSpace)
-                    }
+                    val result = SourceCopier.copy(input, output, maxBytes - total, false, cancelled,
+                        { progress(total + it) }, checkSpace)
                     output.fd.sync()
                     result
                 } }

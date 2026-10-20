@@ -5,6 +5,7 @@ package dev.splitbox.app.data
 import dev.splitbox.core.message
 import dev.splitbox.core.nestedMessage
 
+import androidx.core.content.edit
 import android.app.LocaleManager
 import android.os.LocaleList
 import android.content.Context
@@ -22,8 +23,10 @@ class SettingsRepository(context: Context) {
         message("repositories_the_previous_default_limit_of_2_gib", "Прежний лимит по умолчанию 2 ГиБ заменён автоматическим ограничением по свободному месту. Если вы выбирали 2 ГиБ вручную, верните этот лимит в настройках.") else null
     private val mutable = MutableStateFlow(read())
     init {
-        if (!prefs.getBoolean("sizePolicyV2", false)) prefs.edit()
-            .putInt("maxExpandedGiB", mutable.value.maxExpandedGiB).putBoolean("sizePolicyV2", true).apply()
+        if (!prefs.getBoolean("sizePolicyV2", false)) prefs.edit {
+            putInt("maxExpandedGiB", mutable.value.maxExpandedGiB)
+            putBoolean("sizePolicyV2", true)
+        }
     }
     val state: StateFlow<AppSettings> = mutable
     private fun read() = AppSettings(
@@ -44,13 +47,22 @@ class SettingsRepository(context: Context) {
     fun refreshLanguage() { mutable.value = mutable.value.copy(language = currentLanguage()) }
     fun update(value: AppSettings) {
         require(value.maxExpandedGiB in PackageSizePolicy.choicesGiB) { message("package_size_policy_invalid_package_size_limit", "Некорректный лимит размера пакета") }
-        prefs.edit().putString("backend", value.backend.name).putString("theme", value.theme.name)
-            .putBoolean("dynamicColors", value.dynamicColors).putBoolean("autoSelectSplits", value.autoSelectSplits)
-            .putBoolean("verifySignatures", value.verifySignatures).putBoolean("computeSha256", value.computeSha256)
-            .putInt("maxExpandedGiB", value.maxExpandedGiB).putBoolean("sizePolicyV2", true).putBoolean("cleanAfterInstall", value.cleanAfterInstall)
-            .putBoolean("saveHistory", value.saveHistory).putBoolean("haptics", value.haptics)
-            .putBoolean("keepScreenOn", value.keepScreenOn).putBoolean("installObb", value.installObb)
-            .putBoolean("allowDowngrade", value.allowDowngrade).apply()
+        prefs.edit {
+            putString("backend", value.backend.name)
+            putString("theme", value.theme.name)
+            putBoolean("dynamicColors", value.dynamicColors)
+            putBoolean("autoSelectSplits", value.autoSelectSplits)
+            putBoolean("verifySignatures", value.verifySignatures)
+            putBoolean("computeSha256", value.computeSha256)
+            putInt("maxExpandedGiB", value.maxExpandedGiB)
+            putBoolean("sizePolicyV2", true)
+            putBoolean("cleanAfterInstall", value.cleanAfterInstall)
+            putBoolean("saveHistory", value.saveHistory)
+            putBoolean("haptics", value.haptics)
+            putBoolean("keepScreenOn", value.keepScreenOn)
+            putBoolean("installObb", value.installObb)
+            putBoolean("allowDowngrade", value.allowDowngrade)
+        }
         mutable.value = value
         if (value.language != currentLanguage()) {
             localeManager.applicationLocales = LocaleList.forLanguageTags(value.language.languageTags)
@@ -79,7 +91,9 @@ class HistoryRepository(context: Context) {
         values.forEach { e -> array.put(JSONObject().put("id", e.id).put("timestamp", e.timestamp)
             .put("appLabel", e.appLabel).put("packageName", e.packageName).put("versionName", e.versionName)
             .put("fileName", e.fileName).put("backend", e.backend.name).put("success", e.success ?: JSONObject.NULL).put("message", e.message)) }
-        check(prefs.edit().putString("entries", array.toString()).commit()) { message("repositories_could_not_save_installation_history", "Не удалось сохранить историю установки") }
+        prefs.commitChecked({ message("repositories_could_not_save_installation_history", "Не удалось сохранить историю установки") }) {
+            putString("entries", array.toString())
+        }
         mutable.value = values
     }
 }

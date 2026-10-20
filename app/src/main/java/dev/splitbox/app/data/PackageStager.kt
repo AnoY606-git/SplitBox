@@ -57,10 +57,11 @@ class PackageStager(private val context: Context) {
         computeSha256: Boolean = false): SourceCopyResult {
         require(uri.scheme == "content" || uri.scheme == "file") { message("split_box_view_model_only_content_file_uris_are_supported", "Поддерживаются только content/file URI") }
         try {
+            val storage = AvailableStorage(destination.parentFile!!)
             val source = openSource(uri)
             return source.use { input -> destination.outputStream().use { output ->
                 val result = SourceCopier.copy(input, output, maxBytes, computeSha256, cancelled, progress) { required ->
-                    PackageSizePolicy.requireSpace(required, destination.parentFile!!.usableSpace)
+                    PackageSizePolicy.requireSpace(required, storage.bytes())
                 }
                 output.fd.sync()
                 result
