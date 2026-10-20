@@ -14,7 +14,7 @@ Both test app variants use ID `dev.splitbox.app.benchmark`, a local Android debu
 | `benchmark` | R8/shrinkResources as in release; extra Activity only for UI datasets | `SplitBoxMacrobenchmark` |
 | `profileGeneration` | No R8/shrinkResources; class names suitable for profile generation; no synthetic Activity | `SplitBoxBaselineProfile` |
 
-With AGP 8.13.2, `*TestedApks` configurations explicitly receive Kotlin platform `androidJvm` and JVM environment `android` attributes. This retains Android variants of transitive Compose dependencies when calculating connected test data; ordinary compile/runtime classpaths and production dependencies are unchanged.
+AGP 9.4.1 uses built-in Kotlin support for Android. The previous explicit `*TestedApks` attribute workaround has been removed; both app target variants and their test APKs assemble without it. Successful assembly does not replace connected test execution or establish a measured speedup.
 
 ## Scenarios and metrics
 

@@ -2,11 +2,59 @@
 
 # Verification record
 
-Current unreleased lint fixes appear first, followed by checks of the 1.2.1 release APK with its exact SHA-256. Historical results for published APKs, including 1.2, and Settings development before the version increase remain separate below. Old hashes and Android results are not assigned to the new artifact.
+Stable-source build, framework-test, and signed-candidate checks for 1.2.2 appear first. Separate historical results for lint fixes after 1.2.1, published APKs, and Settings development before the version increase remain below. Old hashes and Android results are not assigned to the new artifact.
 
-# Lint fixes after 1.2.1 — unreleased sources
+# SplitBox 1.2.2 verification
 
-Date: **20 October 2026**. The version remains **1.2.1 / code 8**; the published release is unchanged. Local signed APK SHA-256: **`e629a5fca131d95497c2d25aeb324a30eae200a0728326e38c72241cc2fb9362`**. Android scenarios in this section used the debug APK from the same sources, not this signed APK.
+Date: **20 October 2026**. Checked version: **1.2.2 / code 9**, minSdk **34**, targetSdk **37**, compileSdk **37**. Release tag: [v1.2.2](https://github.com/AnoY606-git/SplitBox/releases/tag/v1.2.2). The checks below apply to stable sources after fixing System confirmation and the ACK race.
+
+## Automated checks
+
+The full local Gradle run (`release122-stable-source-verification.log`) completed **BUILD SUCCESSFUL in 2 min 32 s**, without Kotlin warnings. **287 JVM tests** passed: core **100**, app **187**, with **0** failures/errors/skipped. Debug and release lint: **0 issues** in each variant. Debug, signed release, fixture, both app target variants (`benchmark`/`profileGeneration`), and the corresponding variants of the separate `benchmark` test module assembled.
+
+All **15 Python release-tool tests** passed, including the targetSdk 37 policy. `scripts/check_repository.py` checked **215 files**. CI now includes `lintRelease` and instrumented-APK compilation through `assembleDebugAndroidTest`; this does not establish a completed CI run or device-test execution in CI.
+
+The ACK fix compares current state when mutating the journal. Four regressions cover its CAS boundary; two more cover collisions and late results. ACK mutation testing first produced **2 failures**, then the corrected focused suite passed **24 tests**. The `Aa`/`BB` collision regression first produced **1 failure**, then its focused suite passed **20 tests**. These focused suites verify the fixes and are not added to the 287 JVM total.
+
+The `releaseRuntimeClasspath` report confirmed Kotlin stdlib **2.2.21** and transitive ProfileInstaller **1.4.0**. The ordinary release's ProfileInstaller was not separately upgraded; its presence does not establish integration of a custom Baseline Profile or a speedup.
+
+## Android framework tests
+
+After the final source changes, **5 instrumented framework tests** passed on a dedicated Google APIs API **37**, x86_64 emulator with **16 KiB** pages: `OK (5 tests)`. They covered a Binder-bearing Intent and store recreation, no token recreation after cancellation, a mismatched session, distinct generations for equal filters with isolated cancellation, and malformed/legacy descriptors. Output is retained in `.toolchain/qa122/api37/final-confirmation-instrumentation.txt`. The image was `system-images;android-37.0;google_apis_ps16k;x86_64`, revision **7**.
+
+These exercise the Android framework boundary through an instrumented test APK. They do not replace a user installation through the final signed release APK or establish guaranteed recovery after process death.
+
+## Signed APK and audit
+
+Final signed candidate: **3,269,257 bytes**, SHA-256 **`2ff8357f95ea6c992a7075323b8f19b8718c3b2cb6785f8ad27230f21f0ad446`**. Metadata: package `dev.splitbox.app`, versionName **1.2.2**, versionCode **9**, minSdk **34**, targetSdk **37**, compileSdk **37**. The permanent publisher certificate is retained: SHA-256 **`276541bb10833dc482bdf54f4760498633a38316b13a29901b84cfdb3a316478`**, RSA 4096, v2 signature.
+
+Signature, CRC, and ZIP/ELF 16 KiB alignment checks passed. The APK declares only three permissions: `android.permission.REQUEST_INSTALL_PACKAGES`, `dev.splitbox.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`, and `moe.shizuku.manager.permission.API_V23`. INTERNET is absent. Alignment checks and framework tests do not replace the signed APK's runtime scenarios.
+
+## Signed-APK Android runtime
+
+Both runs used the final signed APK identified above, SHA-256 `2ff8357f95ea6c992a7075323b8f19b8718c3b2cb6785f8ad27230f21f0ad446`. They used real SAF input and native Package Installer windows; no synthetic confirmation Intent was substituted.
+
+| Environment and scenario | Confirmed result |
+| --- | --- |
+| API 34: updating SplitBox | Public 1.2.1 / code 8 updated through `adb install -r` to 1.2.2 / code 9; Russian language and dark theme were retained |
+| API 34: System update of a disabled fixture | Real SAF imported fixture v2 over v1 and native Update completed. Package Manager: code 1 → 2, `enabled=3` → `enabled=3` (disabled by user); successful history entry, empty crash buffer |
+| API 34: Shizuku update | The real shell-UID Shizuku server (PID 2829) and permission granted through its manager installed fixture v2 over v1. Package code 1 → 2, successful app result and history, empty crash buffer. State changed from `enabled=3` to `enabled=0`; this does not establish disabled-state preservation through Shizuku |
+| API 37, x86_64, 16 KiB pages | `getconf PAGESIZE` returned `16384`; fresh installation of signed SplitBox passed. SAF → System → native Install installed fixture v1: code 1, `enabled=0` |
+| API 37: System Update and a late callback after process loss | SAF update to fixture v2 opened native Update. After Home, SplitBox PID 3610 was terminated with `am kill` and `pidof` returned empty. Existing native task 12 was restored and Update confirmed. New SplitBox PID 4347 showed “App installed”; fixture code 2, `enabled=0`, two successful history entries, 0-byte crash buffer |
+
+Evidence is retained under `.toolchain/qa122/api34-final/` and `.toolchain/qa122/api37/`, including `final-results.txt`, package dumps, UI/native screenshots, and crash logs. The API 37 scenario checks a late callback after process death **after the native window had opened**. It does not establish token restoration before launch or guaranteed cold recovery. Disabled-state preservation was checked only through System.
+
+## Limits of current results
+
+System confirmation follows the implemented [ADR 001](ADR-001-SYSTEM-CONFIRMATION.md): Android retains the original Intent and Binder in an immutable activity PendingIntent, while the journal stores a bounded envelope without extras/Parcel. ACK checks session/generation and current state when changing the journal. An unavailable token yields UNKNOWN while retaining files and late correlation; cold restore remains best effort.
+
+Independent review of code and evidence found no open confirmed findings in the reviewed area. Real Magisk/KernelSU, physical ARM devices, OEM/work profiles, large-package stress runs, and performance measurements were not repeated. `INSTALL_SCENARIO_FAST` is an Android hint; no measured speedup is claimed. Historical Android runs below do not count as checks of the new APK or dependency stack.
+
+---
+
+# Historical record: lint fixes after 1.2.1 — unreleased sources
+
+Date: **20 October 2026**. At the time of these checks, the version remained **1.2.1 / code 8**; the published release was unchanged. Local signed APK SHA-256: **`e629a5fca131d95497c2d25aeb324a30eae200a0728326e38c72241cc2fb9362`**. Android scenarios in this section used the debug APK from the same sources, not this signed APK.
 
 A clean `:app:clean :app:testDebugUnitTest :app:lintDebug :app:lintRelease :app:assembleDebug` run succeeded. Debug and release lint: **0 errors / 0 warnings**, down from 11. Separate `:core:test`, signed `:app:assembleRelease`, and fixture builds passed. JVM: **281 tests** (core 100, app 181), **0** failures/errors/skipped. All **13 Python tests** passed.
 

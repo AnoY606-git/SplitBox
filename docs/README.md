@@ -2,7 +2,7 @@
 
 # Путеводитель разработчика
 
-SplitBox 1.2.1 — Android-приложение с отдельным JVM-ядром. Для первой задачи достаточно собрать debug, пройти путь импорта собственного fixture и определить слой изменения по таблице ниже.
+SplitBox 1.2.2 — Android-приложение с отдельным JVM-ядром. Для первой задачи достаточно собрать debug, пройти путь импорта собственного fixture и определить слой изменения по таблице ниже.
 
 ## Порядок знакомства
 
@@ -12,6 +12,8 @@ SplitBox 1.2.1 — Android-приложение с отдельным JVM-ядр
 4. [RELEASING](RELEASING.md): версия, ключ подписи, CI и состав поставки.
 5. [VERIFICATION](VERIFICATION.md): выполненные проверки текущей версии и их пределы.
 6. [benchmark/README](../benchmark/README.md): варианты измерений, реальные и синтетические наборы, запуск на выделенном устройстве.
+
+Решение о подтверждении System зафиксировано в [ADR 001](ADR-001-SYSTEM-CONFIRMATION.md): исходным Intent владеет Android, журнал хранит только ограниченный envelope для поиска handle.
 
 ## Где искать код
 
@@ -35,6 +37,7 @@ SplitBox 1.2.1 — Android-приложение с отдельным JVM-ядр
 | Очередь сохранения и проверка выбора | [RevisionedSaveQueue](../app/src/main/java/dev/splitbox/app/data/RevisionedSaveQueue.kt), [SelectionValidator](../app/src/main/java/dev/splitbox/app/data/SelectionValidator.kt) |
 | Форматы архивов и совместимость | [ArchivePreparer](../core/src/main/kotlin/dev/splitbox/core/ArchivePreparer.kt), [SplitSelector](../core/src/main/kotlin/dev/splitbox/core/SplitSelector.kt) |
 | InstallBackend и выбор способа | [InstallBackend](../app/src/main/java/dev/splitbox/app/installer/InstallBackend.kt) |
+| Параметры Android-сессии: состояние приложения и сценарий установки | [SystemInstallBackend](../app/src/main/java/dev/splitbox/app/installer/SystemInstallBackend.kt) |
 | System journal и восстановление | [InstallJournal](../app/src/main/java/dev/splitbox/app/data/InstallJournal.kt), [SystemSessionRecovery](../app/src/main/java/dev/splitbox/app/data/SystemSessionRecovery.kt) |
 | Root/Shizuku: UUID, фазы и доказанный результат | [PrivilegedOperationStore](../app/src/main/java/dev/splitbox/app/data/PrivilegedOperationStore.kt), [PrivilegedOperationTracker](../app/src/main/java/dev/splitbox/app/data/PrivilegedOperationTracker.kt) |
 | Возврат из permission/OBB export | [ReadyStateRecovery](../app/src/main/java/dev/splitbox/app/data/ReadyStateRecovery.kt) |

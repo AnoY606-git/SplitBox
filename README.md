@@ -40,6 +40,7 @@ SplitBox installs apps downloaded as an archive or a set of APKs. Open a file, r
 - **Control over app components.** Automatic selection of compatible APKs, manual selection, groups, search, and a selected-only filter. Bundletool sets with `toc.pb` are supported.
 - **Checks before installation.** Signatures, SHA-256, Android version, device architecture, and compatibility between package components.
 - **Three installation methods.** Android's system confirmation, Root, or Shizuku: you choose the method. Root/Shizuku access is checked automatically when you select that mode.
+- **Respect disabled apps.** Updating through System preserves an app's enabled or disabled state on Android 14+.
 - **Inspect before installing.** Compare with the installed version and view permissions declared by the selected APKs.
 - **Clear operation status.** Import progress, saved selections, and retry when saving fails. History includes search, filters by outcome and installation method, and a report you can copy.
 - **OBB support.** Export additional files or explicitly enable transfer through Root/Shizuku.
@@ -48,7 +49,7 @@ SplitBox installs apps downloaded as an archive or a set of APKs. Open a file, r
 
 ## Installation
 
-1. Open the [latest release](https://github.com/AnoY606-git/SplitBox/releases/latest) and download the APK from **Assets** (**`SplitBox-1.2.1.apk`** for version 1.2.1).
+1. Open the [latest release](https://github.com/AnoY606-git/SplitBox/releases/latest) and download the APK from **Assets** (**`SplitBox-1.2.2.apk`** for version 1.2.2).
 2. Install the APK on a device running **Android 14 or later**.
 3. Open SplitBox, choose a file, and review the package components before installing.
 
@@ -83,7 +84,7 @@ SplitBox supports APKs and unencrypted APKS, XAPK, and APKM ZIP containers conta
 
 System cannot transfer OBB files into another app's directory. Use export or the explicit Root/Shizuku option for that.
 
-Version 1.1.1 was tested on AOSP Android 14 for an update from 1.1, a 400 MiB APK with 6,008 ZIP entries, full import and installation of an APKS larger than 9 GiB through System and Shizuku, extraction cancellation, and recovery after insufficient storage or process death. Real Magisk/KernelSU, physical ARM devices, and Android 15/16 still require testing. These large-payload device runs were not repeated for 1.2 or 1.2.1. See the [verification report](docs/en/VERIFICATION.md) for the scenarios completed in each version and their limits.
+Version 1.1.1 was tested on AOSP Android 14 for an update from 1.1, a 400 MiB APK with 6,008 ZIP entries, full import and installation of an APKS larger than 9 GiB through System and Shizuku, extraction cancellation, and recovery after insufficient storage or process death. Real Magisk/KernelSU, physical ARM devices, and Android 15/16 still require testing. Those large-payload runs remain historical and do not establish testing of a later APK. See the [verification report](docs/en/VERIFICATION.md) for each version's own scenarios, artifact hashes, and limits.
 
 ## Contributing
 
@@ -93,7 +94,7 @@ Code contributions are welcome; start with the [contributor guide](docs/en/CONTR
 
 ## For developers
 
-SplitBox uses **Kotlin** and **Jetpack Compose / Material 3**. Package parsing lives in a separate JVM core. The current release is **1.2.1**, `versionCode 8`, tag [v1.2.1](https://github.com/AnoY606-git/SplitBox/releases/tag/v1.2.1). Previous versions remain in the release history.
+SplitBox uses **Kotlin** and **Jetpack Compose / Material 3**. Package parsing lives in a separate JVM core. The current version is **1.2.2**, `versionCode 9`, release tag [v1.2.2](https://github.com/AnoY606-git/SplitBox/releases/tag/v1.2.2). Previous versions remain in the release history.
 
 | Document | Contents |
 | --- | --- |
@@ -107,7 +108,7 @@ SplitBox uses **Kotlin** and **Jetpack Compose / Material 3**. Package parsing l
 <details>
 <summary><b>Quick source build</b></summary>
 
-Use JDK 17 and Android SDK platform 36, build-tools 36.0.0, and platform-tools. Set `JAVA_HOME` and `ANDROID_HOME`, or set the SDK path in a local `local.properties`.
+Use JDK 17 and Android SDK platform 37, build-tools 36.0.0, and platform-tools. The app targets SDK 37 and supports Android 14+. Set `JAVA_HOME` and `ANDROID_HOME`, or set the SDK path in a local `local.properties`.
 
 ```bash
 ./gradlew :core:test :app:testDebugUnitTest :app:lintDebug :app:lintRelease :app:assembleDebug :app:assembleRelease

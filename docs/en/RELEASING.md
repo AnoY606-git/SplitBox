@@ -4,7 +4,7 @@
 
 ## Version and checks
 
-`gradle.properties` is the single source of the version. The current app uses `versionName 1.2.1`, `versionCode 8`. Increase `versionCode` for every released update. `versionName` supports `major.minor`, `major.minor.patch`, and prerelease suffixes. Update CHANGELOG and run the command in [Testing](TESTING.md) from a clean checkout.
+`gradle.properties` is the single source of the version. The current app uses `versionName 1.2.2`, `versionCode 9`. Increase `versionCode` for every released update. `versionName` supports `major.minor`, `major.minor.patch`, and prerelease suffixes. Update CHANGELOG and run the command in [Testing](TESTING.md) from a clean checkout.
 
 CI (`.github/workflows/ci.yml`) runs source checks, Python/JVM tests, lint, debug/unsigned release and fixture builds, checks APK policy, and retains results for 14 days. Actions are pinned to commit SHAs, permissions are limited to `contents:read`, and checkout does not persist credentials. CI does not publish a Release or receive production signing secrets.
 
@@ -29,8 +29,8 @@ A release without credentials remains unsigned; the debug signer is not substitu
 
 ```bash
 ./gradlew :app:assembleRelease
-python3 scripts/package.py --apk app/build/outputs/apk/release/app-release.apk --output-dir dist/publish-1.2.1
-(cd dist/publish-1.2.1 && sha256sum -c SHA256SUMS)
+python3 scripts/package.py --apk app/build/outputs/apk/release/app-release.apk --output-dir dist/publish-1.2.2
+(cd dist/publish-1.2.2 && sha256sum -c SHA256SUMS)
 ```
 
 A local preview using an Android Debug certificate requires explicit `--allow-development-key`; its filename gains a `-dev` suffix. This is not the permanent publisher signature. Android rejects a normal update when the certificate changes: plan the transition, and do not delete the app or its data automatically. Keep one permanent certificate for later public releases and back it up separately.
@@ -39,15 +39,15 @@ A local preview using an Android Debug certificate requires explicit `--allow-de
 
 ```bash
 python3 scripts/check_repository.py
-python3 scripts/package.py --source-only --output-dir dist/source-1.2.1
-python3 scripts/package.py --apk app/build/outputs/apk/release/app-release-unsigned.apk --unsigned --output-dir dist/unsigned-1.2.1
+python3 scripts/package.py --source-only --output-dir dist/source-1.2.2
+python3 scripts/package.py --apk app/build/outputs/apk/release/app-release-unsigned.apk --unsigned --output-dir dist/unsigned-1.2.2
 ```
 
 Packaging accepts an explicit APK and checks application ID, both versions, SDK, permissions, CRC, ZIP/ELF 16 KiB alignment, legal assets, and signature. An unsigned APK is marked `-unsigned` and must be signed before installation.
 
 `SHA256SUMS` covers only artifacts from the current command: the source ZIP and, when an APK is explicitly supplied, that APK and `<APK filename>.signature.txt`. Stale files in the same directory are not included. Source ZIP includes Wrapper/JAR, CI, sources, and five binary fixtures; SDKs, keys, caches, logs, and host metadata are excluded. ZIP entries are normalized for repeatable source packaging; bit-for-bit reproducible APK builds are not claimed.
 
-Use a separate output directory for each release. Public distribution includes the signed APK, corresponding sources, signature record, SHA256SUMS, and notes describing verified scenarios and limitations. Retain LICENSE/NOTICE, attribution, and dependency notices. Separately test installation and updating on a device before publication. Distinguish real APK fixtures from synthetic UI datasets, and emulator smoke checks from physical-device measurements. Do not claim physical ARM/Magisk/16 KiB runtime support has been tested, or performance gains, without a corresponding run and original results. Version `1.2.1` / code `8`, GPL-3.0-only, and AnoY606-git attribution must agree across APK, sources, and documentation.
+Use a separate output directory for each release. Public distribution includes the signed APK, corresponding sources, signature record, SHA256SUMS, and notes describing verified scenarios and limitations. Retain LICENSE/NOTICE, attribution, and dependency notices. Separately test installation and updating on a device before publication. Distinguish real APK fixtures from synthetic UI datasets, and emulator smoke checks from physical-device measurements. Do not claim physical ARM/Magisk/16 KiB runtime support has been tested, or performance gains, without a corresponding run and original results. Version `1.2.2` / code `9`, GPL-3.0-only, and AnoY606-git attribution must agree across APK, sources, and documentation.
 
 ## Repository and tags
 
@@ -70,3 +70,5 @@ Release 1.1.1 uses tag `v1.1.1`, `versionCode 6`, and files `SplitBox-1.1.1.apk`
 Release 1.2 uses tag `v1.2`, `versionCode 7`, and files `SplitBox-1.2.apk`, `SplitBox-1.2-source.zip`, `SplitBox-1.2.apk.signature.txt`, and `SHA256SUMS`. Before publication, test Russian and English interfaces, language selection, and automatic checks for the selected Root/Shizuku mode.
 
 Release 1.2.1 uses tag `v1.2.1`, `versionCode 8`, and files `SplitBox-1.2.1.apk`, `SplitBox-1.2.1-source.zip`, `SplitBox-1.2.1.apk.signature.txt`, and `SHA256SUMS`. Retain the permanent publisher certificate for updates from 1.2. Earlier build and debug-APK checks in [Verification](VERIFICATION.md) remain historical; record the new release APK's own results, SHA-256, and limits.
+
+For release 1.2.2, use tag `v1.2.2`, `versionCode 9`, and files `SplitBox-1.2.2.apk`, `SplitBox-1.2.2-source.zip`, `SplitBox-1.2.2.apk.signature.txt`, and `SHA256SUMS`. Retain the permanent publisher certificate for updates from 1.2.1. Record the final APK's hash and its own checks in [Verification](VERIFICATION.md). Check an update of a disabled app through System: its disabled state must survive. The `INSTALL_SCENARIO_FAST` hint requires no new permission and must not be described as a measured speedup.

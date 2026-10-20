@@ -27,10 +27,10 @@ profileable-манифест. Они перезаписывают друг др�
 | `benchmark` | R8 и shrinkResources как в release; дополнительная Activity только для UI-наборов | `SplitBoxMacrobenchmark` |
 | `profileGeneration` | Без R8/shrinkResources; имена классов пригодны для генерации профиля; без синтетической Activity | `SplitBoxBaselineProfile` |
 
-В AGP 8.13.2 конфигурации `*TestedApks` получают атрибуты Kotlin platform
-`androidJvm` и JVM environment `android` явно. Это сохраняет Android-варианты
-транзитивных Compose-зависимостей при вычислении connected test data; обычные
-compile/runtime classpaths и production dependencies не меняются.
+AGP 9.4.1 использует встроенную поддержку Kotlin для Android. Прежний обход
+с явными атрибутами `*TestedApks` удалён; оба target-варианта приложения и
+соответствующие test APK собираются без него. Успешная сборка не заменяет
+запуск connected-тестов и не подтверждает измеренное ускорение.
 
 ## Сценарии и метрики
 

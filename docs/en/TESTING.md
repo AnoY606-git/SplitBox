@@ -26,6 +26,18 @@ Test the side-effect boundary as well as the final value. Confirmation of an old
 
 For System, persist WRITING before APK writes, commit state before `session.commit`, and permission/confirmation before Android handoff. The receiver must await durable storage. Retain exact current/retained session correlation checks and ACK after attempting to open UI. For Root/Shizuku, check cancellation after create but before ID return, commit timeout/transport loss, every persisted phase, corrupted records, and rejection of clearing another UUID. Repeated recovery must not execute shell or commit; UNKNOWN remains `success=null` in history. Explicit new import archives the previous UNKNOWN when `saveHistory` is enabled, without duplicate UUIDs.
 
+## System confirmation and lost handles (1.2.2)
+
+[ADR 001](ADR-001-SYSTEM-CONFIRMATION.md) records the contract and alternatives. The corrected candidate requires these checks; success of the previous APK does not replace them.
+
+- **Real Android Intent.** On API 34 and API 37, obtain Package Installer confirmation for the fixture, including Binder-bearing data. Persistence must write only the v1 envelope: session ID, generation UUID, request code, and filter URI without extras. Original Binder objects and launch-protection tokens remain in Android's PendingIntent; the journal contains no Parcel/Base64 Intent. A synthetic Intent without a Binder is insufficient.
+- **Correlation and lookup.** Check distinct generations, a stale UI event, a retained-session callback after a new import, registry bounds, and `FLAG_NO_CREATE` for existing, missing, and cancelled handles. Lookup must not create a new confirmation Intent. Check Activity recreation and process termination separately, recording the exact termination method.
+- **UNKNOWN and legacy.** A missing handle, malformed envelope, or old Parcel record yields UNKNOWN. Retain the work directory and selected APKs; a late proven callback finishes only its own session. No recommit, sealed-session abandonment, removal of needed files, or legacy Parcel decoding fallback is allowed. Cold restore may either find the existing token or produce UNKNOWN; recovery is not guaranteed.
+- **UI launch.** Sending requires lifecycle at least `STARTED`, current session/generation validation, and a durable envelope. Check sender options `ALLOW_IF_VISIBLE` on API 36+ and `ALLOWED` on API 34/35. Background state must not bypass launch restrictions; `removeLaunchSecurityProtection()` is not used. ACK records a launch attempt rather than installation success.
+- **Completion and write failures.** Persist the proven final result and await `flush()` before cancelling that generation's obsolete PendingIntent. A failed write must retain the handle for late results. Cancelling an old generation must not cancel the new operation's handle. Check ordinary installation and enabled/disabled-fixture updates.
+
+Record the exact SplitBox SHA-256, fingerprint, fixture versions, journal, Package Manager state, UI, and logcat. Check confirmation launch, installation outcome, and history persistence separately. Add completed runs to [Verification](VERIFICATION.md).
+
 ## Project-owned fixtures
 
 Five small files in `core/src/test/resources/fixtures/` contain an APK, bundletool APKS, and flat APKS/APKM/XAPK. Their source is module `fixture`, package `dev.splitbox.fixture`, version 1.0. This is an open test app without user data, with roughly 128 KiB of containers in total. Core integration tests require these files.
@@ -36,6 +48,18 @@ python3 scripts/generate_fixtures.py
 ```
 
 The Linux helper uses a pinned bundletool and the local Android debug key. Public certificates within fixtures are allowed; the private key is not published. Generation can change binary hashes because of signing. To check without overwriting reference files, use `--output-dir` with a separate local directory.
+
+For update testing, prepare two APKs of the same fixture with different versions. Properties `splitbox.fixtureVersionCode` and `splitbox.fixtureVersionName` affect only the local `fixture` module build; their defaults are `1` and `1.0`.
+
+```bash
+mkdir -p .toolchain
+./gradlew :fixture:assembleDebug -Psplitbox.fixtureVersionCode=1 -Psplitbox.fixtureVersionName=1.0
+cp fixture/build/outputs/apk/debug/fixture-debug.apk .toolchain/fixture-v1.apk
+./gradlew :fixture:assembleDebug -Psplitbox.fixtureVersionCode=2 -Psplitbox.fixtureVersionName=2.0
+cp fixture/build/outputs/apk/debug/fixture-debug.apk .toolchain/fixture-v2.apk
+```
+
+Both APKs must use package `dev.splitbox.fixture` and the same local debug certificate. Install v1 on the dedicated device, then update to v2 through SplitBox's System mode; `adb install -r` alone does not check SplitBox's session parameters. This scenario does not overwrite reference files in `core/src/test/resources/fixtures/`.
 
 ## Large-package regression
 
@@ -62,6 +86,8 @@ On a dedicated Android 14+ device with sufficient space, check:
 6. Controls at 320 dp with 200% font: cancellation remains reachable after scrolling and counters refer to the current operation.
 
 ## Device scenarios
+
+For 1.2.2, separately check System parameters on a project-owned Android 14+ device or dedicated AVD. Install the fixture, disable it for the test user, then update it through SplitBox's System mode with normal Android confirmation. Verify the new numeric version, retained disabled state, and successful history entry. Repeat with an enabled fixture and an ordinary fresh installation. Do not assign this result to Root/Shizuku. Retain the SplitBox APK's SHA-256, fingerprint, fixture versions before/after, and Package Manager output; the `INSTALL_SCENARIO_FAST` hint does not replace timing measurements.
 
 | Scenario | Expected behavior |
 | --- | --- |

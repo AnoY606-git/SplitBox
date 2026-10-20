@@ -26,6 +26,18 @@ python3 scripts/check_repository.py --apk app/build/outputs/apk/release/app-rele
 
 Для System сохраняйте WRITING до записи APK, состояние commit до `session.commit`, permission/confirmation до Android handoff. Receiver должен дождаться durable записи. Сохраняйте тесты exact-current/retained correlation и ACK после попытки открытия UI. Для Root/Shizuku проверьте cancel после create до возврата ID, timeout/transport loss на commit, чтение каждой фазы, повреждённую запись и запрет удаления чужого UUID. Повторное восстановление не запускает shell или commit; UNKNOWN остаётся `success=null` в истории. Явный новый импорт архивирует предыдущий UNKNOWN при `saveHistory`, без дубликатов UUID.
 
+## Подтверждение System и потеря handle (1.2.2)
+
+Контракт и альтернативы зафиксированы в [ADR 001](ADR-001-SYSTEM-CONFIRMATION.md). Следующие проверки обязательны для исправленного кандидата; успешные результаты предыдущего APK их не заменяют.
+
+- **Настоящий Intent Android.** На API 34 и API 37 получите подтверждение Package Installer для fixture, включая Binder-bearing данные. Сохранение должно записать только envelope v1: session ID, UUID поколения, request code и URI фильтра без extras. Исходные Binder и токены защиты остаются в Android PendingIntent; журнал не содержит Parcel/Base64 Intent. Синтетический Intent без Binder недостаточен для этой проверки.
+- **Корреляция и поиск.** Проверьте различающиеся поколения, устаревшее UI-событие, callback retained-сессии после нового импорта, ограничение реестра и `FLAG_NO_CREATE` при существующем, отсутствующем и отменённом handle. Lookup не должен создавать новый подтверждающий Intent. Пересоздание Activity и завершение процесса проверяйте отдельно, сохраняя точный способ завершения.
+- **UNKNOWN и legacy.** Отсутствующий handle, некорректный envelope и старая Parcel-запись дают UNKNOWN. Рабочий каталог и выбранные APK остаются доступными; поздний доказанный callback завершает только свою сессию. Не должно быть повторного commit, отмены запечатанной сессии, очистки нужных файлов или декодирования legacy Parcel как fallback. Допустимы оба исхода cold restore: существующий токен или UNKNOWN; восстановление не гарантируется.
+- **Запуск UI.** Отправка разрешена при lifecycle не ниже `STARTED`, после актуальной проверки session/generation и durable envelope. Проверьте sender options `ALLOW_IF_VISIBLE` на API 36+ и `ALLOWED` на API 34/35. Приложение в фоне не должно обходить ограничения запуска; `removeLaunchSecurityProtection()` не используется. ACK подтверждает попытку запуска, а не успех установки.
+- **Завершение и сбои записи.** При подтверждённом итоге сначала запишите результат и дождитесь `flush()`, затем отмените obsolete PendingIntent этого поколения. При отказе записи handle должен сохраниться для позднего результата. Отмена старого поколения не должна отменять handle новой операции. Проверьте обычную установку и обновление включённого/отключённого fixture.
+
+Запишите точный SHA-256 SplitBox, fingerprint, версии fixture, журнал, Package Manager state, UI и logcat. Результат публикации подтверждения, исход установки и сохранение истории проверяются отдельно. Завершённые прогоны добавляются в [VERIFICATION](VERIFICATION.md).
+
 ## Собственные fixtures
 
 Пять небольших файлов в `core/src/test/resources/fixtures/` — APK, bundletool APKS и плоские APKS/APKM/XAPK. Их исходник — модуль `fixture`, package `dev.splitbox.fixture`, версия 1.0. Это открытое тестовое приложение без пользовательских данных, около 128 KiB контейнеров суммарно. Файлы обязательны для core integration tests.
@@ -36,6 +48,18 @@ python3 scripts/generate_fixtures.py
 ```
 
 Linux helper использует закреплённый bundletool и локальный Android debug key. Публичные сертификаты в fixtures допустимы; приватный key не публикуется. Генерация может менять binary hashes из-за подписи. Для проверки без перезаписи эталонов задайте `--output-dir` с отдельным локальным каталогом.
+
+Для проверки обновления подготовьте два APK одного fixture с разными версиями. Свойства `splitbox.fixtureVersionCode` и `splitbox.fixtureVersionName` меняют только локальную сборку модуля `fixture`; значения по умолчанию — `1` и `1.0`.
+
+```bash
+mkdir -p .toolchain
+./gradlew :fixture:assembleDebug -Psplitbox.fixtureVersionCode=1 -Psplitbox.fixtureVersionName=1.0
+cp fixture/build/outputs/apk/debug/fixture-debug.apk .toolchain/fixture-v1.apk
+./gradlew :fixture:assembleDebug -Psplitbox.fixtureVersionCode=2 -Psplitbox.fixtureVersionName=2.0
+cp fixture/build/outputs/apk/debug/fixture-debug.apk .toolchain/fixture-v2.apk
+```
+
+Оба APK должны иметь package `dev.splitbox.fixture` и одинаковую локальную debug-подпись. Установите v1 на выделенное устройство, затем обновите до v2 через System в SplitBox; проверка `adb install -r` сама по себе не проверяет параметры сессии SplitBox. Эталонные файлы `core/src/test/resources/fixtures/` для этого сценария не перезаписываются.
 
 ## Регрессия больших пакетов
 
@@ -62,6 +86,8 @@ python3 scripts/generate_large_fixture.py \
 6. Управление на 320 dp со шрифтом 200%; отмена должна быть доступна после прокрутки, счётчики должны относиться к текущей операции.
 
 ## Проверки на устройстве
+
+Для 1.2.2 отдельно проверьте параметры System на собственном Android 14+ устройстве или выделенном AVD. Установите fixture, отключите его для тестового пользователя, затем обновите через SplitBox в режиме System с обычным подтверждением Android. Проверьте новую числовую версию, сохранённое отключённое состояние и успешный результат в истории. Повторите для включённого fixture и для обычной новой установки. Не переносите этот результат на Root/Shizuku. Сохраните SHA-256 APK SplitBox, fingerprint, версии fixture до/после и вывод Package Manager; подсказка `INSTALL_SCENARIO_FAST` не заменяет измерение времени.
 
 | Сценарий | Что должно произойти |
 | --- | --- |

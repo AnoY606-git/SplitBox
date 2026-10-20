@@ -7,13 +7,15 @@
 | Tool | Version |
 | --- | --- |
 | JDK | 17 |
-| Gradle Wrapper | 8.13 |
-| Android Gradle Plugin | 8.13.2 |
-| Kotlin | 2.2.21 |
-| Android SDK | platform 36, build-tools 36.0.0, platform-tools |
+| Gradle Wrapper | 9.6.1 |
+| Android Gradle Plugin | 9.4.1 |
+| Kotlin | Built into AGP for Android; JVM and Compose plugin 2.2.21 |
+| Android SDK | platform 37 (`platforms;android-37.0`), build-tools 36.0.0, platform-tools |
 | Python | 3 for release scripts; 3.12+ for the Linux bootstrap |
 
-The app uses minSdk 34 / Android 14+ and compile/target SDK 36. `gradle.properties` is the single source of `versionName`/`versionCode`: currently `1.2.1` / `8`.
+The app uses minSdk 34 / Android 14+, compileSdk 37, and targetSdk 37. `gradle.properties` is the single source of `versionName`/`versionCode`: currently `1.2.2` / `9`. Android modules use AGP's built-in Kotlin support; the separate `org.jetbrains.kotlin.android` plugin is not applied.
+
+The main dependencies are Compose BOM `2026.09.00`, Activity `1.13.0`, Core `1.19.1`, Lifecycle `2.11.0`, kotlinx.coroutines `1.11.0`, and apksig `9.4.1`. Module Gradle files contain the exact declarations; the Compose BOM controls Compose libraries rather than all of AndroidX.
 
 ## With JDK and SDK already installed
 
@@ -59,7 +61,7 @@ bash scripts/gradle.sh :app:assembleBenchmark :benchmark:assembleBenchmark \
   :app:assembleProfileGeneration :benchmark:assembleProfileGeneration
 ```
 
-Both target variants use application ID `dev.splitbox.app.benchmark`, `testOnly=true`, `debuggable=false`, a profileable manifest, and a local debug signature. They can coexist with `dev.splitbox.app`, but replace each other. `benchmark` enables R8/shrink and contains a separate Activity for synthetic lists; `profileGeneration` preserves class names and excludes that Activity. Both explicitly use ProfileInstaller 1.4.1; ordinary release receives ProfileInstaller 1.4.0 transitively. This library's presence does not establish that custom SplitBox rules are included in the APK's profile.
+Both target variants use application ID `dev.splitbox.app.benchmark`, `testOnly=true`, `debuggable=false`, a profileable manifest, and a local debug signature. They can coexist with `dev.splitbox.app`, but replace each other. `benchmark` enables R8/shrink and contains a separate Activity for synthetic lists; `profileGeneration` preserves class names and excludes that Activity. Both explicitly use ProfileInstaller 1.4.1; the 1.2.2 ordinary release resolves ProfileInstaller 1.4.0 transitively, as confirmed in `releaseRuntimeClasspath`. This library's presence does not establish that custom SplitBox rules are included in the APK's profile.
 
 Release and target APKs do not request INTERNET. The separate test runner APK receives INTERNET from AndroidX Benchmark for Perfetto's localhost connection; this permission is not added to the shipped app. Manual target installation requires `adb install -t -r`.
 

@@ -2,7 +2,7 @@
 
 # Developer guide
 
-SplitBox 1.2.1 is an Android app with a separate JVM core. For your first task, build debug, import a project-owned fixture, and use the table below to locate the layer responsible for your change.
+SplitBox 1.2.2 is an Android app with a separate JVM core. For your first task, build debug, import a project-owned fixture, and use the table below to locate the layer responsible for your change.
 
 ## Reading order
 
@@ -12,6 +12,8 @@ SplitBox 1.2.1 is an Android app with a separate JVM core. For your first task, 
 4. [Releasing](RELEASING.md): version, signing key, CI, and distribution contents.
 5. [Verification](VERIFICATION.md): completed checks for the current version and their limits.
 6. [Benchmarks](BENCHMARKING.md): measurement variants, real and synthetic datasets, and dedicated-device runs.
+
+The System confirmation design is recorded in [ADR 001](ADR-001-SYSTEM-CONFIRMATION.md): Android owns the original Intent, while the journal stores only a bounded lookup envelope.
 
 ## Code entry points
 
@@ -35,6 +37,7 @@ SplitBox 1.2.1 is an Android app with a separate JVM core. For your first task, 
 | Save queue and selection checks | [RevisionedSaveQueue](../../app/src/main/java/dev/splitbox/app/data/RevisionedSaveQueue.kt), [SelectionValidator](../../app/src/main/java/dev/splitbox/app/data/SelectionValidator.kt) |
 | Archive formats and compatibility | [ArchivePreparer](../../core/src/main/kotlin/dev/splitbox/core/ArchivePreparer.kt), [SplitSelector](../../core/src/main/kotlin/dev/splitbox/core/SplitSelector.kt) |
 | InstallBackend and method selection | [InstallBackend](../../app/src/main/java/dev/splitbox/app/installer/InstallBackend.kt) |
+| Android session parameters: app state and install scenario | [SystemInstallBackend](../../app/src/main/java/dev/splitbox/app/installer/SystemInstallBackend.kt) |
 | System journal and recovery | [InstallJournal](../../app/src/main/java/dev/splitbox/app/data/InstallJournal.kt), [SystemSessionRecovery](../../app/src/main/java/dev/splitbox/app/data/SystemSessionRecovery.kt) |
 | Root/Shizuku: UUID, phases, and proven outcomes | [PrivilegedOperationStore](../../app/src/main/java/dev/splitbox/app/data/PrivilegedOperationStore.kt), [PrivilegedOperationTracker](../../app/src/main/java/dev/splitbox/app/data/PrivilegedOperationTracker.kt) |
 | Returning from permission settings/OBB export | [ReadyStateRecovery](../../app/src/main/java/dev/splitbox/app/data/ReadyStateRecovery.kt) |

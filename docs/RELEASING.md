@@ -4,7 +4,7 @@
 
 ## Версия и проверки
 
-`gradle.properties` — единственный источник версии. Текущее приложение: versionName `1.2.1`, versionCode `8`. У каждого выпускаемого обновления повышайте versionCode. versionName допускает `major.minor`, `major.minor.patch` и суффикс prerelease. Обновляйте CHANGELOG и выполняйте команду из [TESTING](TESTING.md) в чистом checkout.
+`gradle.properties` — единственный источник версии. Текущее приложение: versionName `1.2.2`, versionCode `9`. У каждого выпускаемого обновления повышайте versionCode. versionName допускает `major.minor`, `major.minor.patch` и суффикс prerelease. Обновляйте CHANGELOG и выполняйте команду из [TESTING](TESTING.md) в чистом checkout.
 
 CI (`.github/workflows/ci.yml`) выполняет source checks, Python/JVM tests, lint, debug/unsigned release и fixture build; проверяет APK policy и сохраняет результаты на 14 дней. Actions закреплены на commit SHA, permissions ограничены contents:read, checkout не сохраняет credentials. CI не публикует Release и не получает production signing secrets.
 
@@ -29,8 +29,8 @@ Release без credentials остаётся unsigned; debug signer не подс
 
 ```bash
 ./gradlew :app:assembleRelease
-python3 scripts/package.py --apk app/build/outputs/apk/release/app-release.apk --output-dir dist/publish-1.2.1
-(cd dist/publish-1.2.1 && sha256sum -c SHA256SUMS)
+python3 scripts/package.py --apk app/build/outputs/apk/release/app-release.apk --output-dir dist/publish-1.2.2
+(cd dist/publish-1.2.2 && sha256sum -c SHA256SUMS)
 ```
 
 Для локального preview с Android Debug certificate требуется явный `--allow-development-key`; имя получает суффикс `-dev`. Это не постоянная publisher-подпись. При смене сертификата обычное Android обновление не принимается: заранее определите переход, не удаляйте приложение и данные автоматически. Используйте один постоянный сертификат для последующих публичных релизов и храните его backup отдельно.
@@ -39,15 +39,15 @@ python3 scripts/package.py --apk app/build/outputs/apk/release/app-release.apk -
 
 ```bash
 python3 scripts/check_repository.py
-python3 scripts/package.py --source-only --output-dir dist/source-1.2.1
-python3 scripts/package.py --apk app/build/outputs/apk/release/app-release-unsigned.apk --unsigned --output-dir dist/unsigned-1.2.1
+python3 scripts/package.py --source-only --output-dir dist/source-1.2.2
+python3 scripts/package.py --apk app/build/outputs/apk/release/app-release-unsigned.apk --unsigned --output-dir dist/unsigned-1.2.2
 ```
 
 Упаковка принимает явный APK и проверяет applicationId, обе версии, SDK, permissions, CRC, ZIP/ELF 16 KiB alignment, legal assets и подпись. Unsigned APK помечается `-unsigned` и требует подписи перед установкой.
 
 `SHA256SUMS` описывает только артефакты текущей команды: source ZIP и, при явном APK, этот APK и `<имя APK>.signature.txt`. Старые файлы из той же папки не подхватываются. Source ZIP включает Wrapper/JAR, CI, исходники и пять binary fixtures; SDK, keys, caches, logs и host metadata исключены. ZIP entries нормализованы для повторяемой упаковки исходников; побитовая воспроизводимость APK не заявляется.
 
-Для каждого релиза используйте отдельную папку. В публичную поставку включите подписанный APK, соответствующие исходники, signature record, SHA256SUMS и заметки с проверенными сценариями/ограничениями. Сохраните LICENSE/NOTICE/авторство и уведомления зависимостей. Перед публикацией отдельно проверьте установку и обновление на устройстве. В заметках разделяйте настоящие APK fixtures и синтетические UI-наборы, emulator smoke и измерения на физическом устройстве. Не заявляйте physical ARM/Magisk/16 KiB runtime или выигрыш производительности без соответствующего прогона и исходных результатов. Версия `1.2.1` / code `8`, GPL-3.0-only и авторство AnoY606-git должны совпадать в APK, исходниках и документации.
+Для каждого релиза используйте отдельную папку. В публичную поставку включите подписанный APK, соответствующие исходники, signature record, SHA256SUMS и заметки с проверенными сценариями/ограничениями. Сохраните LICENSE/NOTICE/авторство и уведомления зависимостей. Перед публикацией отдельно проверьте установку и обновление на устройстве. В заметках разделяйте настоящие APK fixtures и синтетические UI-наборы, emulator smoke и измерения на физическом устройстве. Не заявляйте physical ARM/Magisk/16 KiB runtime или выигрыш производительности без соответствующего прогона и исходных результатов. Версия `1.2.2` / code `9`, GPL-3.0-only и авторство AnoY606-git должны совпадать в APK, исходниках и документации.
 
 ## Репозиторий и теги
 
@@ -70,3 +70,5 @@ git status --short
 Релиз 1.2 использует тег `v1.2`, versionCode `7` и файлы `SplitBox-1.2.apk`, `SplitBox-1.2-source.zip`, `SplitBox-1.2.apk.signature.txt`, `SHA256SUMS`. Перед публикацией проверяются русский и английский интерфейс, выбор языка и автоматическая проверка выбранного Root/Shizuku.
 
 Релиз 1.2.1 использует тег `v1.2.1`, versionCode `8` и файлы `SplitBox-1.2.1.apk`, `SplitBox-1.2.1-source.zip`, `SplitBox-1.2.1.apk.signature.txt`, `SHA256SUMS`. Сохраняйте постоянный сертификат издателя для обновления с 1.2. Проверки предыдущих сборок и debug APK в [VERIFICATION](VERIFICATION.md) остаются историческими; для нового релизного APK фиксируйте собственные результаты, его SHA-256 и границы проверок.
+
+Для выпуска 1.2.2 используйте тег `v1.2.2`, `versionCode 9` и файлы `SplitBox-1.2.2.apk`, `SplitBox-1.2.2-source.zip`, `SplitBox-1.2.2.apk.signature.txt`, `SHA256SUMS`. Сохраните постоянный сертификат издателя для обновления с 1.2.1. Зафиксируйте хеш финального APK и его собственные проверки в [VERIFICATION](VERIFICATION.md). Проверьте обновление отключённого приложения через System: отключённое состояние должно сохраниться. Подсказка `INSTALL_SCENARIO_FAST` не требует нового разрешения и не должна описываться как измеренное ускорение.
