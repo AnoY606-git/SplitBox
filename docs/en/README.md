@@ -2,7 +2,7 @@
 
 # Developer guide
 
-SplitBox 1.2 is an Android app with a separate JVM core. For your first task, build debug, import a project-owned fixture, and use the table below to locate the layer responsible for your change.
+SplitBox 1.2.1 is an Android app with a separate JVM core. For your first task, build debug, import a project-owned fixture, and use the table below to locate the layer responsible for your change.
 
 ## Reading order
 

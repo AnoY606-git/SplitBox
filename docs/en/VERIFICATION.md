@@ -2,11 +2,31 @@
 
 # Verification record
 
-The results below belong to the identified published APKs and their source revisions. They are historical release evidence, including version 1.2; they do not certify subsequent unreleased source changes. The current Settings presentation change keeps version `1.2` / code `7` and has no new published release. Record its checks separately rather than assigning the old APK hash or device results to the new code.
+Checks of the 1.2.1 release APK appear first with its exact SHA-256. Historical results for published APKs, including 1.2, and Settings development before the version increase remain separate below. Old hashes and Android results are not assigned to the new artifact.
 
-# Current source: unreleased Settings presentation changes
+# SplitBox 1.2.1 verification
 
-Date: **20 October 2026**. This section covers current source changes after published 1.2. Version remains **1.2 / versionCode 7**; no new release was created or published. Historical published-APK results remain separate below.
+Date: **20 October 2026**. Checked signed release APK: versionName **1.2.1**, versionCode **8**, minSdk **34** / target SDK **36**, SHA-256 **`bb3e39c1e789bb25938933d8070c374187b448cb050df16d239d1ff9494d3af8`**. Android results in this section belong to this APK.
+
+## Automated checks
+
+The local Gradle run completed successfully in **2 min 7 s**. **276 JVM tests** passed: core **100**, app **176**, with **0 failures/errors/skipped**. Separately, **13 Python release-tool tests** passed. Lint debug/release reported **0 errors / 11 previous warnings** each.
+
+## Signed-APK update on Android
+
+A project-owned dedicated AOSP API 34 x86_64 AVD successfully updated from the public 1.2 APK, SHA-256 **`96bffd38db29e6bd0da8ac6374c7a6b3f52800ce94d3796b06737866ba3b0c3f`**, to the signed 1.2.1 APK identified above through `adb install -r`. The permanent publisher certificate was retained; app data was not deleted.
+
+The Russian app locale survived the update. Theme `DARK`, selected in the old 1.2 build, remained selected and appeared in the new Settings interface. The installed package flags did not contain `DEBUGGABLE`. Crash buffer was empty after the check.
+
+## Version 1.2.1 limits
+
+This checks updating and retaining preferences on the identified AOSP emulator. No new full installation scenarios through System/Root/Shizuku, large APK/APKS/OBB runs, TalkBack, physical ARM devices, or Android 15/16 checks were performed in this run. The 200% font interface checks below used the same UI code before the version increase and remain historical; they do not count as a repeated test of the final 1.2.1 APK.
+
+---
+
+# Historical record: unreleased Settings presentation changes before 1.2.1
+
+Date: **20 October 2026**. This section covers source changes after published 1.2 and before the version increase for 1.2.1. At the time of these checks, the version remained **1.2 / versionCode 7**; no new release had yet been created or published. These results are retained as historical evidence and do not count as checks of the 1.2.1 release APK. Historical published-APK results remain separate below.
 
 ## Automated checks and local APK
 
@@ -29,7 +49,7 @@ A project-owned dedicated AOSP API 34 x86_64 AVD used 720×1440 px, density 360,
 
 The size dialog's explanation was already scrollable before this change. Placing choices before it improves access to selection at large font sizes; it does not fix a previously absent scrolling capability.
 
-## Limits of the current checks
+## Limits of these historical checks
 
 TalkBack, physical ARM devices, real Root installation, and new large-package installation runs were not repeated in this work. Debug-APK interface checks do not constitute a new signed-release runtime test or testing of every installation method. Earlier large APKS/OBB results remain attached to the older builds identified below.
 

@@ -48,7 +48,7 @@ SplitBox installs apps downloaded as an archive or a set of APKs. Open a file, r
 
 ## Installation
 
-1. Open the [latest release](https://github.com/AnoY606-git/SplitBox/releases/latest) and download the APK from **Assets** (**`SplitBox-1.2.apk`** for version 1.2).
+1. Open the [latest release](https://github.com/AnoY606-git/SplitBox/releases/latest) and download the APK from **Assets** (**`SplitBox-1.2.1.apk`** for version 1.2.1).
 2. Install the APK on a device running **Android 14 or later**.
 3. Open SplitBox, choose a file, and review the package components before installing.
 
@@ -83,7 +83,7 @@ SplitBox supports APKs and unencrypted APKS, XAPK, and APKM ZIP containers conta
 
 System cannot transfer OBB files into another app's directory. Use export or the explicit Root/Shizuku option for that.
 
-Version 1.1.1 was tested on AOSP Android 14 for an update from 1.1, a 400 MiB APK with 6,008 ZIP entries, full import and installation of an APKS larger than 9 GiB through System and Shizuku, extraction cancellation, and recovery after insufficient storage or process death. Real Magisk/KernelSU, physical ARM devices, and Android 15/16 still require testing. These large-payload device runs were not repeated for 1.2. See the [verification report](docs/en/VERIFICATION.md) for the scenarios completed in each version and their limits.
+Version 1.1.1 was tested on AOSP Android 14 for an update from 1.1, a 400 MiB APK with 6,008 ZIP entries, full import and installation of an APKS larger than 9 GiB through System and Shizuku, extraction cancellation, and recovery after insufficient storage or process death. Real Magisk/KernelSU, physical ARM devices, and Android 15/16 still require testing. These large-payload device runs were not repeated for 1.2 or 1.2.1. See the [verification report](docs/en/VERIFICATION.md) for the scenarios completed in each version and their limits.
 
 ## Contributing
 
@@ -93,7 +93,7 @@ Code contributions are welcome; start with the [contributor guide](docs/en/CONTR
 
 ## For developers
 
-SplitBox uses **Kotlin** and **Jetpack Compose / Material 3**. Package parsing lives in a separate JVM core. The current release is **1.2**, `versionCode 7`, tag [v1.2](https://github.com/AnoY606-git/SplitBox/releases/tag/v1.2). Previous versions remain in the release history.
+SplitBox uses **Kotlin** and **Jetpack Compose / Material 3**. Package parsing lives in a separate JVM core. The current release is **1.2.1**, `versionCode 8`, tag [v1.2.1](https://github.com/AnoY606-git/SplitBox/releases/tag/v1.2.1). Previous versions remain in the release history.
 
 | Document | Contents |
 | --- | --- |

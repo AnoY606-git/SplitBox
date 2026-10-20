@@ -13,14 +13,14 @@
 | Android SDK | platform 36, build-tools 36.0.0, platform-tools |
 | Python | 3 для release scripts; 3.12+ для Linux bootstrap |
 
-Приложение: minSdk 34 / Android 14+, compile/target SDK 36. `gradle.properties` содержит единственный источник versionName/versionCode: сейчас `1.2` / `7`.
+Приложение: minSdk 34 / Android 14+, compile/target SDK 36. `gradle.properties` содержит единственный источник versionName/versionCode: сейчас `1.2.1` / `8`.
 
 ## С установленными JDK и SDK
 
 Откройте корень проекта в Android Studio или задайте `JAVA_HOME` и `ANDROID_HOME`. Вместо SDK environment variable можно использовать локальный `local.properties` с `sdk.dir`.
 
 ```bash
-./gradlew :core:test :app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:assembleRelease :fixture:assembleDebug
+./gradlew :core:test :app:testDebugUnitTest :app:lintDebug :app:lintRelease :app:assembleDebug :app:assembleRelease :fixture:assembleDebug
 python3 -m unittest discover -s scripts/tests -v
 python3 scripts/check_repository.py
 ```
@@ -33,7 +33,7 @@ Windows: `gradlew.bat`. Первая сборка загружает Gradle и M
 
 ```bash
 python3 scripts/bootstrap.py --accept-licenses
-bash scripts/gradle.sh :core:test :app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:assembleRelease
+bash scripts/gradle.sh :core:test :app:testDebugUnitTest :app:lintDebug :app:lintRelease :app:assembleDebug :app:assembleRelease
 ```
 
 JDK и Android command-line tools закреплены по URL/SHA-256 в `gradle/toolchain.json`; SDK packages устанавливаются через sdkmanager. Без `--accept-licenses` developer SDK licenses подтверждаются интерактивно. Bootstrap пишет в `.toolchain/`, не меняет глобальные инструменты и сохраняет существующий local.properties.

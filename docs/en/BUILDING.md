@@ -13,14 +13,14 @@
 | Android SDK | platform 36, build-tools 36.0.0, platform-tools |
 | Python | 3 for release scripts; 3.12+ for the Linux bootstrap |
 
-The app uses minSdk 34 / Android 14+ and compile/target SDK 36. `gradle.properties` is the single source of `versionName`/`versionCode`: currently `1.2` / `7`.
+The app uses minSdk 34 / Android 14+ and compile/target SDK 36. `gradle.properties` is the single source of `versionName`/`versionCode`: currently `1.2.1` / `8`.
 
 ## With JDK and SDK already installed
 
 Open the project root in Android Studio, or set `JAVA_HOME` and `ANDROID_HOME`. A local `local.properties` containing `sdk.dir` can replace the SDK environment variable.
 
 ```bash
-./gradlew :core:test :app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:assembleRelease :fixture:assembleDebug
+./gradlew :core:test :app:testDebugUnitTest :app:lintDebug :app:lintRelease :app:assembleDebug :app:assembleRelease :fixture:assembleDebug
 python3 -m unittest discover -s scripts/tests -v
 python3 scripts/check_repository.py
 ```
@@ -33,7 +33,7 @@ For Linux x86_64 with Python 3.12+ and curl:
 
 ```bash
 python3 scripts/bootstrap.py --accept-licenses
-bash scripts/gradle.sh :core:test :app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:assembleRelease
+bash scripts/gradle.sh :core:test :app:testDebugUnitTest :app:lintDebug :app:lintRelease :app:assembleDebug :app:assembleRelease
 ```
 
 JDK and Android command-line tools are pinned by URL/SHA-256 in `gradle/toolchain.json`; SDK packages are installed through sdkmanager. Without `--accept-licenses`, developer SDK licenses are accepted interactively. Bootstrap writes to `.toolchain/`, leaves global tools alone, and preserves an existing `local.properties`.

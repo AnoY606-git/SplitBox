@@ -33,9 +33,9 @@ flowchart TD
 
 ViewModel assembles dependencies, controls the current operation, and publishes StateFlow. Compose reads state and sends actions. `UiEvent` requests Android UI; persisted notices show dismissible errors and a retry action where available. Composition and explicit dependency passing are used without a separate DI framework. Repositories encapsulate settings and history on disk.
 
-## Settings after 1.2: unreleased source changes
+## Settings in 1.2.1
 
-The current source groups existing settings into Installation, App, and Files and data, followed by About SplitBox, GPL, and component licenses. System/Root/Shizuku use a vertical list with inline Root/Shizuku status and explicit retry. Language, theme, and package-size rows show their current value and open a single-choice dialog. Size choices remain Auto/1/2/4/8/16/32/64 GiB. Active-operation restrictions remain, including an already open size-limit dialog. This adds no settings, dependencies, or published release; source version remains 1.2 / code 7. Historical testing of the published 1.2 APK does not certify this interface.
+Version 1.2.1 groups existing settings into Installation, App, and Files and data, followed by About SplitBox, GPL, and component licenses. System/Root/Shizuku use a vertical list with inline Root/Shizuku status and explicit retry. Language, theme, and package-size rows show their current value and open a single-choice dialog. Size choices remain Auto/1/2/4/8/16/32/64 GiB. Active-operation restrictions remain, including an already open size-limit dialog. This adds no settings or dependencies; the interface is available in 1.2.1 / code 8. Historical testing of the published 1.2 APK does not certify this interface; 1.2.1 results and historical checks before the version increase remain separate in [Verification](VERIFICATION.md).
 
 ## Interface language and messages
 
