@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package dev.splitbox.app.ui.components
 
+import dev.splitbox.core.message
+import dev.splitbox.core.nestedMessage
+
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -13,10 +16,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Icon
+import dev.splitbox.app.ui.LocalizedIcon as Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import dev.splitbox.app.ui.LocalizedText as Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -96,7 +99,7 @@ fun SplitBoxMark(modifier: Modifier = Modifier, expanded: Boolean = false) {
 }
 
 fun BackendMode.displayName(): String = when (this) {
-    BackendMode.SYSTEM -> "Системный"
+    BackendMode.SYSTEM -> message("history_presentation_system", "Системный")
     BackendMode.ROOT -> "Root"
     BackendMode.SHIZUKU -> "Shizuku"
 }
@@ -104,11 +107,11 @@ fun BackendMode.displayName(): String = when (this) {
 fun formatBytes(value: Long): String {
     val number = value.coerceAtLeast(0)
     return when {
-        number >= 1024L * 1024 * 1024 -> String.format(Locale.forLanguageTag("ru"), "%.2f ГБ", number / (1024.0 * 1024 * 1024))
-        number >= 1024L * 1024 -> String.format(Locale.forLanguageTag("ru"), "%.1f МБ", number / (1024.0 * 1024))
-        number >= 1024 -> String.format(Locale.forLanguageTag("ru"), "%.1f КБ", number / 1024.0)
-        else -> "$number Б"
+        number >= 1024L * 1024 * 1024 -> message("components_2f_gb", "%.2f ГБ", number / (1024.0 * 1024 * 1024))
+        number >= 1024L * 1024 -> message("components_1f_mb", "%.1f МБ", number / (1024.0 * 1024))
+        number >= 1024 -> message("components_1f_kb", "%.1f КБ", number / 1024.0)
+        else -> message("components_1_b", "%1\$s Б", number)
     }
 }
 
-fun formatTimestamp(timestamp: Long): String = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT, Locale.forLanguageTag("ru")).format(Date(timestamp))
+fun formatTimestamp(timestamp: Long, locale: Locale = Locale.getDefault()): String = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT, locale).format(Date(timestamp))

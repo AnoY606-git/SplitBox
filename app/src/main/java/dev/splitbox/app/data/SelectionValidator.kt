@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package dev.splitbox.app.data
 
+import dev.splitbox.core.message
+import dev.splitbox.core.nestedMessage
+
 import dev.splitbox.core.ApkEntry
 import dev.splitbox.core.validateSelection
 import kotlinx.coroutines.*
@@ -29,7 +32,7 @@ class SelectionValidator(private val scope: CoroutineScope,
         job = scope.launch(dispatcher) {
             val error = try { validate(entries, paths); null }
             catch (e: CancellationException) { throw e }
-            catch (e: Exception) { e.message ?: "Не удалось проверить выбор APK" }
+            catch (e: Exception) { e.message ?: message("selection_validator_could_not_validate_the_apk_selection", "Не удалось проверить выбор APK") }
             synchronized(lock) {
                 if (revision == token) mutable.value = SelectionValidation(token, paths, error = error)
             }

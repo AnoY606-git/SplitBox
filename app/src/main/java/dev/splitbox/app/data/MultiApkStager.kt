@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package dev.splitbox.app.data
 
+import dev.splitbox.core.message
+import dev.splitbox.core.nestedMessage
+
 import dev.splitbox.core.StagedApk
 import java.io.File
 import java.io.InputStream
@@ -12,20 +15,20 @@ import java.util.concurrent.CancellationException
 object MultiApkStager {
     fun <T> stage(sources: List<T>, workDir: File, maxBytes: Long, name: (T) -> String,
         open: (T) -> InputStream, cancelled: () -> Boolean, progress: (Long) -> Unit): List<StagedApk> {
-        require(sources.size in 1..128) { "Выберите от 1 до 128 APK одного приложения" }
-        require(maxBytes > 0) { "Лимит размера должен быть положительным" }
+        require(sources.size in 1..128) { message("multi_apk_stager_select_1_to_128_apks_for_a", "Выберите от 1 до 128 APK одного приложения") }
+        require(maxBytes > 0) { message("multi_apk_stager_the_size_limit_must_be_positive", "Лимит размера должен быть положительным") }
         require(workDir.isDirectory && !Files.isSymbolicLink(workDir.toPath()) && workDir.listFiles()?.isEmpty() == true) {
-            "Нужен пустой закрытый рабочий каталог"
+            message("multi_apk_stager_an_empty_private_working_directory_is_required", "Нужен пустой закрытый рабочий каталог")
         }
         var total = 0L
         try {
             return sources.mapIndexed { index, source ->
-                if (cancelled() || Thread.currentThread().isInterrupted) throw CancellationException("Копирование отменено")
+                if (cancelled() || Thread.currentThread().isInterrupted) throw CancellationException(message("multi_apk_stager_copying_canceled", "Копирование отменено"))
                 val display = name(source).take(80).replace(Regex("[^A-Za-zА-Яа-яЁё0-9._-]"), "_")
                     .replace("..", "_").trim('.', '_').ifEmpty { "APK" }
                 val prefix = index.toString().padStart(4, '0')
                 val destination = File(workDir, "$prefix.apk")
-                check(destination.createNewFile()) { "Временный файл уже существует" }
+                check(destination.createNewFile()) { message("multi_apk_stager_the_temporary_file_already_exists", "Временный файл уже существует") }
                 val copied = open(source).use { input -> destination.outputStream().use { output ->
                     val result = SourceCopier.copy(input, output, maxBytes - total, false, cancelled, { progress(total + it) }) { required ->
                         PackageSizePolicy.requireSpace(required, workDir.usableSpace)

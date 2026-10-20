@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package dev.splitbox.app.data
 
+import dev.splitbox.core.message
+import dev.splitbox.core.nestedMessage
+
 import dev.splitbox.app.model.OperationResult
 
 /** Переходы фаз вызываются на IO; доказанный ответ PM нельзя отменить ошибкой последующей записи. */
@@ -12,18 +15,18 @@ class PrivilegedOperationTracker(private val store: PrivilegedOperationStore) {
         private set
     fun begin(record: PrivilegedOperationRecord) { store.write(record); current = record; hasCommitProof = false }
     private fun transition(transform: (PrivilegedOperationRecord) -> PrivilegedOperationRecord) {
-        val next = transform(checkNotNull(current) { "Операция установки ещё не создана" })
+        val next = transform(checkNotNull(current) { message("privileged_operation_tracker_the_installation_operation_has_not_been_created", "Операция установки ещё не создана") })
         store.write(next); current = next
     }
     fun sessionCreated(id: Int) = transition { it.copy(sessionId = id, phase = PrivilegedOperationPhase.WRITING) }
     fun commitStarted() = transition { it.copy(phase = PrivilegedOperationPhase.COMMITTING) }
     fun committed(): String? {
         hasCommitProof = true
-        val value = checkNotNull(current) { "Операция установки ещё не создана" }.copy(
-            phase = PrivilegedOperationPhase.COMMITTED, success = true, message = "Установка APK подтверждена Package Manager")
+        val value = checkNotNull(current) { message("privileged_operation_tracker_the_installation_operation_has_not_been_created", "Операция установки ещё не создана") }.copy(
+            phase = PrivilegedOperationPhase.COMMITTED, success = true, message = message("privileged_operation_store_apk_installation_confirmed_by_package_manager", "Установка APK подтверждена Package Manager"))
         current = value
         return try { store.write(value); null }
-        catch (e: Exception) { "APK установлен, но подтверждение не записано: ${e.message}" }
+        catch (e: Exception) { message("privileged_operation_tracker_apk_installed_but_confirmation_was_not_recorded", "APK установлен, но подтверждение не записано: %1\$s", nestedMessage(e.message)) }
     }
     fun finished(result: OperationResult) = transition { it.copy(phase = PrivilegedOperationPhase.FINISHED,
         success = result.success, message = result.message, obbWarning = result.obbWarning) }

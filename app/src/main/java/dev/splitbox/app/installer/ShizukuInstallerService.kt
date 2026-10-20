@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package dev.splitbox.app.installer
 
+import dev.splitbox.core.message
+import dev.splitbox.core.nestedMessage
+
 import android.os.Binder
 import android.os.IBinder
 import android.os.ParcelFileDescriptor
@@ -17,15 +20,15 @@ class ShizukuInstallerService : IPrivilegedInstaller.Stub() {
     private var client: IBinder? = null
     private val clientDeath = IBinder.DeathRecipient { Thread { destroy() }.start() }
     @Synchronized override fun attachClient(token: IBinder) {
-        check(!destroying && (ownerUid == -1 || ownerUid == Binder.getCallingUid())) { "UserService уже занят другим клиентом" }
+        check(!destroying && (ownerUid == -1 || ownerUid == Binder.getCallingUid())) { message("shizuku_installer_service_userservice_is_already_in_use_by_another", "UserService уже занят другим клиентом") }
         client?.unlinkToDeath(clientDeath, 0)
         ownerUid = Binder.getCallingUid()
         client = token
         token.linkToDeath(clientDeath, 0)
     }
     private fun authorize(userId: Int? = null) {
-        check(!destroying && ownerUid >= 0 && Binder.getCallingUid() == ownerUid) { "Клиент UserService недоступен" }
-        require(userId == null || userId == ownerUid / 100000) { "Разрешён только текущий пользователь Android" }
+        check(!destroying && ownerUid >= 0 && Binder.getCallingUid() == ownerUid) { message("shizuku_installer_service_userservice_client_unavailable", "Клиент UserService недоступен") }
+        require(userId == null || userId == ownerUid / 100000) { message("shizuku_installer_service_only_the_current_android_user_is_allowed", "Разрешён только текущий пользователь Android") }
     }
     @Synchronized override fun createSession(userId: Int, totalBytes: Long, downgrade: Boolean): Int {
         authorize(userId)
@@ -48,7 +51,7 @@ class ShizukuInstallerService : IPrivilegedInstaller.Stub() {
     @Synchronized override fun copyObb(userId: Int, packageName: String, version: Long, basename: String, size: Long, source: ParcelFileDescriptor, progress: ITransferProgress?): String {
         return ParcelFileDescriptor.AutoCloseInputStream(source).use { input ->
             authorize(userId)
-            require(size > 0) { "Размер OBB должен быть положительным" }
+            require(size > 0) { message("shizuku_installer_service_the_obb_size_must_be_positive", "Размер OBB должен быть положительным") }
             val plan = ObbPolicy.copyPlan(userId, packageName, version, basename, size)
             val reporting = TransferProgress(size) { bytes, _ -> runCatching { progress?.onProgress(bytes) } }
             copyShizukuObb(runner, plan, ProgressInputStream(input, reporting::report), size).output
@@ -69,20 +72,20 @@ class ShizukuInstallerService : IPrivilegedInstaller.Stub() {
 internal class PrivilegedSessionCommands(private val runner: CommandRunner) {
     private val sessions = ConcurrentHashMap<Int, Long>()
     fun createSession(userId: Int, totalBytes: Long, downgrade: Boolean): Int {
-        require(totalBytes > 0) { "Общий размер APK должен быть положительным" }
+        require(totalBytes > 0) { message("shizuku_installer_service_the_total_apk_size_must_be_positive", "Общий размер APK должен быть положительным") }
         val id = PmProtocol.sessionId(runner.run(listOf("sh", "-c", PmProtocol.create(userId, totalBytes, downgrade))))
         sessions[id] = totalBytes
         return id
     }
     fun writeApk(sessionId: Int, index: Int, size: Long, input: InputStream, progress: (Long) -> Unit = {}) {
-        check(sessions.containsKey(sessionId)) { "Сессия не принадлежит этому соединению" }
-        require(index in 0..4095 && size > 0 && size <= sessions.getValue(sessionId)) { "Недопустимый номер части или размер APK" }
+        check(sessions.containsKey(sessionId)) { message("shizuku_installer_service_the_session_does_not_belong_to_this", "Сессия не принадлежит этому соединению") }
+        require(index in 0..4095 && size > 0 && size <= sessions.getValue(sessionId)) { message("shizuku_installer_service_invalid_part_number_or_apk_size", "Недопустимый номер части или размер APK") }
         val reporting = TransferProgress(size) { bytes, _ -> progress(bytes) }
         runner.run(listOf("sh", "-c", PmProtocol.write(sessionId, index, size)), ProgressInputStream(input, reporting::report),
             timeoutSeconds = TransferPolicy.timeoutSeconds(size)).requireSuccess()
     }
     fun commitSession(sessionId: Int): String {
-        val size = checkNotNull(sessions.remove(sessionId)) { "Сессия не принадлежит этому соединению" }
+        val size = checkNotNull(sessions.remove(sessionId)) { message("shizuku_installer_service_the_session_does_not_belong_to_this", "Сессия не принадлежит этому соединению") }
         // После отправки commit нельзя abandon по потере Binder: установка могла завершиться.
         val result = runner.run(listOf("sh", "-c", PmProtocol.commit(sessionId)), timeoutSeconds = TransferPolicy.timeoutSeconds(size))
         if (result.provenCommitFailure) sessions[sessionId] = size
@@ -103,6 +106,6 @@ internal fun copyShizukuObb(runner: CommandRunner, plan: ObbCopyPlan, input: Inp
     finally {
         // destroy() ждёт synchronized copyObb. Не запускаем новый процесс, который cancelAll мог бы тоже остановить.
         try { java.nio.file.Files.deleteIfExists(java.io.File(plan.temporaryPath).toPath()) }
-        catch (e: Exception) { throw IllegalStateException("Не удалось удалить временный OBB ${plan.temporaryPath}: ${e.message}", e) }
+        catch (e: Exception) { throw IllegalStateException(message("root_install_backend_could_not_delete_the_temporary_obb_file", "Не удалось удалить временный OBB %1\$s: %2\$s", plan.temporaryPath, nestedMessage(e.message)), e) }
     }
 }

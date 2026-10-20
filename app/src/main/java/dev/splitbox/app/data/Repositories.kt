@@ -2,6 +2,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package dev.splitbox.app.data
 
+import dev.splitbox.core.message
+import dev.splitbox.core.nestedMessage
+
+import android.app.LocaleManager
+import android.os.LocaleList
 import android.content.Context
 import dev.splitbox.app.model.*
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -10,10 +15,11 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 class SettingsRepository(context: Context) {
+    private val localeManager = context.getSystemService(LocaleManager::class.java)
     private val prefs = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
     private val migratedDefault = !prefs.getBoolean("sizePolicyV2", false) && prefs.getInt("maxExpandedGiB", 0) == 2
     val sizeMigrationNotice: String? = if (migratedDefault)
-        "Прежний лимит по умолчанию 2 ГиБ заменён автоматическим ограничением по свободному месту. Если вы выбирали 2 ГиБ вручную, верните этот лимит в настройках." else null
+        message("repositories_the_previous_default_limit_of_2_gib", "Прежний лимит по умолчанию 2 ГиБ заменён автоматическим ограничением по свободному месту. Если вы выбирали 2 ГиБ вручную, верните этот лимит в настройках.") else null
     private val mutable = MutableStateFlow(read())
     init {
         if (!prefs.getBoolean("sizePolicyV2", false)) prefs.edit()
@@ -21,6 +27,7 @@ class SettingsRepository(context: Context) {
     }
     val state: StateFlow<AppSettings> = mutable
     private fun read() = AppSettings(
+        language = currentLanguage(),
         backend = runCatching { BackendMode.valueOf(prefs.getString("backend", "SYSTEM")!!) }.getOrDefault(BackendMode.SYSTEM),
         theme = runCatching { ThemeMode.valueOf(prefs.getString("theme", "SYSTEM")!!) }.getOrDefault(ThemeMode.SYSTEM),
         dynamicColors = prefs.getBoolean("dynamicColors", false),
@@ -33,8 +40,10 @@ class SettingsRepository(context: Context) {
         keepScreenOn = prefs.getBoolean("keepScreenOn", true), installObb = prefs.getBoolean("installObb", false),
         allowDowngrade = prefs.getBoolean("allowDowngrade", false)
     )
+    private fun currentLanguage() = AppLanguage.fromLanguageTags(localeManager.applicationLocales.toLanguageTags())
+    fun refreshLanguage() { mutable.value = mutable.value.copy(language = currentLanguage()) }
     fun update(value: AppSettings) {
-        require(value.maxExpandedGiB in PackageSizePolicy.choicesGiB) { "Некорректный лимит размера пакета" }
+        require(value.maxExpandedGiB in PackageSizePolicy.choicesGiB) { message("package_size_policy_invalid_package_size_limit", "Некорректный лимит размера пакета") }
         prefs.edit().putString("backend", value.backend.name).putString("theme", value.theme.name)
             .putBoolean("dynamicColors", value.dynamicColors).putBoolean("autoSelectSplits", value.autoSelectSplits)
             .putBoolean("verifySignatures", value.verifySignatures).putBoolean("computeSha256", value.computeSha256)
@@ -43,6 +52,9 @@ class SettingsRepository(context: Context) {
             .putBoolean("keepScreenOn", value.keepScreenOn).putBoolean("installObb", value.installObb)
             .putBoolean("allowDowngrade", value.allowDowngrade).apply()
         mutable.value = value
+        if (value.language != currentLanguage()) {
+            localeManager.applicationLocales = LocaleList.forLanguageTags(value.language.languageTags)
+        }
     }
 }
 class HistoryRepository(context: Context) {
@@ -67,7 +79,7 @@ class HistoryRepository(context: Context) {
         values.forEach { e -> array.put(JSONObject().put("id", e.id).put("timestamp", e.timestamp)
             .put("appLabel", e.appLabel).put("packageName", e.packageName).put("versionName", e.versionName)
             .put("fileName", e.fileName).put("backend", e.backend.name).put("success", e.success ?: JSONObject.NULL).put("message", e.message)) }
-        check(prefs.edit().putString("entries", array.toString()).commit()) { "Не удалось сохранить историю установки" }
+        check(prefs.edit().putString("entries", array.toString()).commit()) { message("repositories_could_not_save_installation_history", "Не удалось сохранить историю установки") }
         mutable.value = values
     }
 }

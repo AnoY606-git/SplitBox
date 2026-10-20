@@ -25,10 +25,10 @@ internal class Proto(private val fields: List<Field>) {
     fun has(number: Int): Boolean = fields.any { it.number == number }
     fun string(number: Int, default: String = ""): String = bytes(number)?.let { utf8(it) } ?: default
     fun strings(number: Int): List<String> = repeated(number).map { utf8(it) }
-    fun only(vararg allowed: Int) { if (numbers().any { it !in allowed }) throw PreparationException("Неподдерживаемые условия совместимости в toc.pb") }
+    fun only(vararg allowed: Int) { if (numbers().any { it !in allowed }) throw PreparationException(message("bundle_toc_reader_unsupported_targeting_in_toc_pb", "Неподдерживаемые условия совместимости в toc.pb")) }
     companion object {
         fun parse(bytes: ByteArray): Proto {
-            if (bytes.size > MAX_METADATA_BYTES) throw PreparationException("toc.pb превышает 4 МиБ")
+            if (bytes.size > MAX_METADATA_BYTES) throw PreparationException(message("bundle_toc_reader_toc_pb_exceeds_4_mib", "toc.pb превышает 4 МиБ"))
             var cursor = 0
             fun varint(): Long {
                 var value = 0L
@@ -69,7 +69,7 @@ internal class Proto(private val fields: List<Field>) {
             Charsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT).onUnmappableCharacter(CodingErrorAction.REPORT)
                 .decode(ByteBuffer.wrap(bytes)).toString()
         } catch (_: Exception) { bad() }
-        private fun bad(): Nothing = throw PreparationException("Повреждённый protobuf toc.pb")
+        private fun bad(): Nothing = throw PreparationException(message("bundle_toc_reader_corrupted_toc_pb_protobuf", "Повреждённый protobuf toc.pb"))
     }
 }
 
@@ -146,28 +146,28 @@ class BundleTocReader {
     internal fun select(bytes: ByteArray, device: DeviceProfile): TocSelection {
         val root = Proto.parse(bytes)
         val warnings = mutableListOf<String>()
-        if (root.has(3) || root.has(6)) warnings += "Пакеты ресурсов не поддерживаются; игровые ресурсы из отдельных срезов не будут установлены."
-        if (root.repeated(1).size > MAX_PACKAGE_APKS) throw PreparationException("Слишком много вариантов в toc.pb")
+        if (root.has(3) || root.has(6)) warnings += message("bundle_toc_reader_asset_packs_are_not_supported_game_assets", "Пакеты ресурсов не поддерживаются; игровые ресурсы из отдельных срезов не будут установлены.")
+        if (root.repeated(1).size > MAX_PACKAGE_APKS) throw PreparationException(message("bundle_toc_reader_too_many_variants_in_toc_pb", "Слишком много вариантов в toc.pb"))
         var apkCount = 0
         val variants = root.messages(1).map { variant ->
             val modules = variant.messages(2).map { set ->
                 val metadata = set.message(1)
                 val name = metadata.string(1)
-                if (!Regex("[A-Za-z0-9_]+") .matches(name)) throw PreparationException("Некорректное имя модуля в toc.pb")
+                if (!Regex("[A-Za-z0-9_]+") .matches(name)) throw PreparationException(message("bundle_toc_reader_invalid_module_name_in_toc_pb", "Некорректное имя модуля в toc.pb"))
                 val delivery = metadata.integer(6)
-                if (delivery !in 0L..3L) throw PreparationException("Неизвестный тип доставки в toc.pb")
+                if (delivery !in 0L..3L) throw PreparationException(message("bundle_toc_reader_unknown_delivery_type_in_toc_pb", "Неизвестный тип доставки в toc.pb"))
                 val moduleType = metadata.integer(7)
                 if (moduleType !in 0L..1L || metadata.has(8) || metadata.has(9))
-                    throw PreparationException("Модуль изолированного SDK или машинного обучения из toc.pb не поддерживается")
+                    throw PreparationException(message("bundle_toc_reader_an_isolated_sdk_or_machine_learning_module", "Модуль изолированного SDK или машинного обучения из toc.pb не поддерживается"))
                 val installTime = delivery == 1L || delivery == 0L && metadata.integer(2) == 0L
                 TocModule(name, metadata.strings(4), moduleTargeting(metadata.message(5)), installTime,
                     metadata.integer(3) != 0L, set.messages(2).map { apk ->
-                        if (++apkCount > MAX_PACKAGE_APKS) throw PreparationException("Слишком много APK в toc.pb")
+                        if (++apkCount > MAX_PACKAGE_APKS) throw PreparationException(message("bundle_toc_reader_too_many_apks_in_toc_pb", "Слишком много APK в toc.pb"))
                         val path = safeArchivePath(apk.string(2))
-                        if (!path.endsWith(".apk", true)) throw PreparationException("toc.pb ссылается на не-APK: $path")
+                        if (!path.endsWith(".apk", true)) throw PreparationException(message("bundle_toc_reader_non_apk_path_in_toc_pb_1", "toc.pb ссылается на не-APK: %1\$s", path))
                         val metadataKinds = (3..9).filter { apk.has(it) }
                         if (metadataKinds.size != 1 || metadataKinds.single() !in 3..4)
-                            throw PreparationException("Мгновенные, системные, ресурсные APK и APEX из toc.pb не поддерживаются")
+                            throw PreparationException(message("bundle_toc_reader_instant_system_and_asset_apks_and_apex", "Мгновенные, системные, ресурсные APK и APEX из toc.pb не поддерживаются"))
                         val standalone = metadataKinds.single() == 4
                         val split = apk.message(if (standalone) 4 else 3)
                         TocApk(path, targeting(apk.message(1), variant = false),
@@ -175,27 +175,27 @@ class BundleTocReader {
                             standalone || split.integer(2) != 0L, standalone)
                     })
             }
-            if (modules.map { it.name }.distinct().size != modules.size) throw PreparationException("Повторяющийся модуль в toc.pb")
+            if (modules.map { it.name }.distinct().size != modules.size) throw PreparationException(message("bundle_toc_reader_duplicate_module_in_toc_pb", "Повторяющийся модуль в toc.pb"))
             TocVariant(targeting(variant.message(1), variant = true), variant.integer(3), modules)
         }
         val compatible = variants.filter { it.targeting.matches(device) && it.modules.any { module -> module.name == "base" && !module.instant } }
         val variant = compatible.maxWithOrNull(compareBy<TocVariant> { it.number }.thenBy { it.targeting.sdkFloor() })
-            ?: throw PreparationException("В APKS нет совместимого варианта для устройства")
+            ?: throw PreparationException(message("bundle_toc_reader_apks_has_no_compatible_variant_for_this", "В APKS нет совместимого варианта для устройства"))
         val modules = variant.modules.filter { it.installTime && !it.instant && it.targeting.matches(device) }.associateBy { it.name }
-        if ("base" !in modules) throw PreparationException("Выбранный вариант не содержит базовый APK для установки вместе с приложением")
+        if ("base" !in modules) throw PreparationException(message("bundle_toc_reader_the_selected_variant_has_no_base_apk", "Выбранный вариант не содержит базовый APK для установки вместе с приложением"))
         modules.values.forEach { module ->
-            if (module.dependencies.any { it != "base" && it !in modules }) throw PreparationException("Отсутствует зависимость модуля ${module.name} для установки вместе с приложением")
+            if (module.dependencies.any { it != "base" && it !in modules }) throw PreparationException(message("bundle_toc_reader_missing_dependency_of_module_1_for_installation", "Отсутствует зависимость модуля %1\$s для установки вместе с приложением", module.name))
         }
         val paths = linkedMapOf<String, TocApk>()
         modules.values.forEach { module ->
             val apks = module.apks.filter { it.targeting.matches(device) }
             if (module.apks.any { it.targeting.hasAbiConstraint() } && apks.none { it.targeting.hasAbiConstraint() })
-                throw PreparationException("Нет APK с совместимыми условиями выбора ABI для модуля ${module.name}")
-            if (apks.count { it.master } != 1) throw PreparationException("Модуль ${module.name} должен содержать один совместимый основной APK")
-            apks.forEach { if (paths.put(it.path, it) != null) throw PreparationException("Повторяющийся путь APK в toc.pb") }
+                throw PreparationException(message("bundle_toc_reader_no_apk_with_compatible_abi_targeting_for", "Нет APK с совместимыми условиями выбора ABI для модуля %1\$s", module.name))
+            if (apks.count { it.master } != 1) throw PreparationException(message("bundle_toc_reader_module_1_must_contain_one_compatible_primary", "Модуль %1\$s должен содержать один совместимый основной APK", module.name))
+            apks.forEach { if (paths.put(it.path, it) != null) throw PreparationException(message("bundle_toc_reader_duplicate_apk_path_in_toc_pb", "Повторяющийся путь APK в toc.pb")) }
         }
-        if (paths.values.any { it.standalone } && paths.size != 1) throw PreparationException("Нельзя объединять автономный APK с разделёнными частями APK")
-        if (variant.modules.any { !it.installTime || it.instant }) warnings += "Загружаемые по требованию и мгновенные модули пропущены; установлены только модули начальной установки."
+        if (paths.values.any { it.standalone } && paths.size != 1) throw PreparationException(message("bundle_toc_reader_a_standalone_apk_cannot_be_combined_with", "Нельзя объединять автономный APK с разделёнными частями APK"))
+        if (variant.modules.any { !it.installTime || it.instant }) warnings += message("bundle_toc_reader_on_demand_and_instant_modules_were_skipped", "Загружаемые по требованию и мгновенные модули пропущены; установлены только модули начальной установки.")
         return TocSelection(paths, modules, warnings, root.string(4).takeIf { it.isNotEmpty() })
     }
     private fun moduleTargeting(proto: Proto): Targeting {
@@ -223,28 +223,28 @@ class BundleTocReader {
     }
     private fun sdk(proto: Proto): Int {
         proto.only(1); val wrapper = proto.message(1); wrapper.only(1)
-        return wrapper.integer(1).takeIf { it in 1L..Int.MAX_VALUE }?.toInt() ?: throw PreparationException("Некорректные условия выбора SDK")
+        return wrapper.integer(1).takeIf { it in 1L..Int.MAX_VALUE }?.toInt() ?: throw PreparationException(message("bundle_toc_reader_invalid_sdk_targeting", "Некорректные условия выбора SDK"))
     }
     private fun abi(proto: Proto): String {
         proto.only(1)
         return mapOf(1L to "armeabi", 2L to "armeabi-v7a", 3L to "arm64-v8a", 4L to "x86", 5L to "x86_64", 6L to "mips", 7L to "mips64", 8L to "riscv64")[proto.integer(1)]
-            ?: throw PreparationException("Неизвестные условия выбора ABI")
+            ?: throw PreparationException(message("bundle_toc_reader_unknown_abi_targeting", "Неизвестные условия выбора ABI"))
     }
     private fun multiAbi(proto: Proto): Set<String> {
         proto.only(1)
-        return proto.messages(1).map { abi(it) }.toSet().takeIf { it.isNotEmpty() } ?: throw PreparationException("Пустые условия выбора нескольких ABI")
+        return proto.messages(1).map { abi(it) }.toSet().takeIf { it.isNotEmpty() } ?: throw PreparationException(message("bundle_toc_reader_empty_multi_abi_targeting", "Пустые условия выбора нескольких ABI"))
     }
     private fun density(proto: Proto): Int {
         proto.only(1, 2)
-        if (proto.has(1) == proto.has(2)) throw PreparationException("Некорректные условия выбора плотности экрана")
+        if (proto.has(1) == proto.has(2)) throw PreparationException(message("bundle_toc_reader_invalid_screen_density_targeting", "Некорректные условия выбора плотности экрана"))
         return if (proto.has(1)) mapOf(1L to 65535, 2L to 120, 3L to 160, 4L to 213, 5L to 240, 6L to 320, 7L to 480, 8L to 640)[proto.integer(1)]
-            ?: throw PreparationException("Неизвестное обозначение плотности экрана")
-        else proto.integer(2).takeIf { it in 1L..65535L }?.toInt() ?: throw PreparationException("Некорректная плотность экрана в DPI")
+            ?: throw PreparationException(message("bundle_toc_reader_unknown_screen_density_alias", "Неизвестное обозначение плотности экрана"))
+        else proto.integer(2).takeIf { it in 1L..65535L }?.toInt() ?: throw PreparationException(message("bundle_toc_reader_invalid_screen_density_in_dpi", "Некорректная плотность экрана в DPI"))
     }
     private fun languageTarget(proto: Proto): Pair<List<String>, List<String>> {
         proto.only(1, 2)
         val values = proto.strings(1); val alternatives = proto.strings(2)
-        if ((values + alternatives).any { !Regex("[A-Za-z]{2,3}([_-][A-Za-z0-9]+)*").matches(it) }) throw PreparationException("Неизвестные условия выбора языка")
+        if ((values + alternatives).any { !Regex("[A-Za-z]{2,3}([_-][A-Za-z0-9]+)*").matches(it) }) throw PreparationException(message("bundle_toc_reader_unknown_language_targeting", "Неизвестные условия выбора языка"))
         return values to alternatives
     }
 }

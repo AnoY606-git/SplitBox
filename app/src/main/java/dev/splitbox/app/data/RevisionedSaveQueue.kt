@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package dev.splitbox.app.data
 
+import dev.splitbox.core.message
+import dev.splitbox.core.nestedMessage
+
 import java.io.IOException
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
@@ -74,7 +77,7 @@ class RevisionedSaveQueue<T>(scope: CoroutineScope, dispatcher: CoroutineDispatc
     suspend fun flush() {
         val target = synchronized(lock) { mutable.value }
         val outcome = state.first { it.generation != target.generation || it.savedRevision >= target.revision || (!it.saving && it.error != null) }
-        if (outcome.generation != target.generation) throw CancellationException("Снимок сохранения заменён новой операцией")
-        if (outcome.savedRevision < target.revision) throw IOException(outcome.error ?: "Не удалось сохранить состояние")
+        if (outcome.generation != target.generation) throw CancellationException(message("revisioned_save_queue_the_saved_snapshot_was_replaced_by_a", "Снимок сохранения заменён новой операцией"))
+        if (outcome.savedRevision < target.revision) throw IOException(outcome.error ?: message("split_box_view_model_could_not_save_state", "Не удалось сохранить состояние"))
     }
 }

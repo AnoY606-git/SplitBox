@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package dev.splitbox.app.installer
 
+import dev.splitbox.core.message
+import dev.splitbox.core.nestedMessage
+
 import java.io.InputStream
 import java.util.concurrent.Callable
 import java.util.concurrent.Executors
@@ -35,11 +38,11 @@ class ProcessRunner : CommandRunner {
             val writer = workers.submit(Callable {
                 process.outputStream.use { sink -> input?.copyTo(sink, 65536) }
             })
-            check(process.waitFor(timeoutSeconds, TimeUnit.SECONDS)) { "Превышено время ожидания команды ($timeoutSeconds с)" }
+            check(process.waitFor(timeoutSeconds, TimeUnit.SECONDS)) { message("process_runner_command_timed_out_s", "Превышено время ожидания команды (%1\$s с)", timeoutSeconds) }
             val result = PmResult(process.exitValue(), output.get(5, TimeUnit.SECONDS))
             try { writer.get(5, TimeUnit.SECONDS) }
             catch (e: Exception) {
-                if (result.success) throw java.io.IOException("Передача APK не завершена: ${result.output.take(1000)}", e)
+                if (result.success) throw java.io.IOException(message("process_runner_apk_transfer_was_not_completed", "Передача APK не завершена: %1\$s", result.output.take(1000)), e)
             }
             return result
         } finally {
@@ -51,7 +54,7 @@ class ProcessRunner : CommandRunner {
                 val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
                 while (process.isAlive) {
                     val remaining = deadline - System.nanoTime()
-                    check(remaining > 0) { "Не удалось завершить дочерний процесс за 5 секунд" }
+                    check(remaining > 0) { message("process_runner_could_not_terminate_the_child_process_within", "Не удалось завершить дочерний процесс за 5 секунд") }
                     try { process.waitFor(remaining, TimeUnit.NANOSECONDS) }
                     catch (_: InterruptedException) { interrupted = true }
                 }

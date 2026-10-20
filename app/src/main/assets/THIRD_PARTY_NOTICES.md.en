@@ -1,0 +1,24 @@
+# Third-party component licenses
+
+SplitBox original source code is licensed under GPL-3.0-only (see LICENSE). Libraries and build tools retain their licenses; SplitBox does not claim authorship of these components.
+
+| Component | License | Source project |
+| --- | --- | --- |
+| Kotlin standard library and compiler | Apache-2.0 | https://github.com/JetBrains/kotlin |
+| JetBrains annotations | Apache-2.0 | https://github.com/JetBrains/java-annotations |
+| kotlinx.serialization, transitive dependency | Apache-2.0 | https://github.com/Kotlin/kotlinx.serialization |
+| Guava ListenableFuture, transitive dependency | Apache-2.0 | https://github.com/google/guava |
+| kotlinx.coroutines | Apache-2.0 | https://github.com/Kotlin/kotlinx.coroutines |
+| AndroidX Activity, Core, Lifecycle, SavedState, ProfileInstaller, Graphics Path, Compose UI/Foundation/Material 3 | Apache-2.0 | https://android.googlesource.com/platform/frameworks/support/ |
+| Compose Material icons | Apache-2.0 | https://fonts.google.com/icons |
+| Shizuku API и provider 13.1.5 | Apache-2.0 | https://github.com/RikkaApps/Shizuku-API |
+| Android apksig | Apache-2.0 | https://android.googlesource.com/platform/tools/apksig/ |
+| JUnit 4, tests only | EPL-1.0 | https://github.com/junit-team/junit4 |
+| Android Gradle Plugin / SDK build tools, build only | Componentы Apache-2.0; действуют условия загрузки Android SDK | https://android.googlesource.com/ |
+| Gradle, build only | Apache-2.0 | https://github.com/gradle/gradle |
+| Eclipse Temurin OpenJDK, build only | GPL-2.0 with Classpath Exception | https://adoptium.net/ |
+| bundletool, test fixture generation only | Apache-2.0 | https://github.com/google/bundletool |
+
+The app does not include Google Play Services, Firebase, advertising or analytics SDKs, proprietary installers or the Shizuku server. Shizuku is a separate open source tool. ZIP, Android binary XML and protobuf parsing in core is original SplitBox code based on public Android and bundletool specifications.
+
+Direct dependencies and versions are listed in app/build.gradle.kts and core/build.gradle.kts. To inspect the current dependency tree, run ./gradlew :app:dependencies --configuration releaseRuntimeClasspath. Transitive dependencies retain their licenses; details are available in this tree and the library source projects. Canonical Apache-2.0 and GPL-3.0 license texts are included in the app for offline reading.

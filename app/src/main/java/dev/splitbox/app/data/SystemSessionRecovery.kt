@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package dev.splitbox.app.data
 
+import dev.splitbox.core.message
+import dev.splitbox.core.nestedMessage
 /** Доставка ожидает подтверждения UI об успешном возврате из startActivity. */
 class ConfirmationDelivery {
     private var launched: String? = null
@@ -44,14 +46,14 @@ data class SystemSessionLedger(val current: PendingInstall? = null, val retained
         copy(current = null, retained = retain(it))
     } ?: this
     fun missingSession(id: Int): SystemSessionLedger = markUnknown(id,
-        "Android больше не показывает сессию; окончательный результат ещё не получен. Можно проверить статус или открыть приложение. Поздний ответ Android обновит историю.", false)
+        message("system_session_recovery_android_no_longer_lists_the_session_the", "Android больше не показывает сессию; окончательный результат ещё не получен. Можно проверить статус или открыть приложение. Поздний ответ Android обновит историю."), false)
     fun markUnknown(id: Int, message: String, keepConfirmation: Boolean): SystemSessionLedger = find(id)?.let {
         if (it.state == "FINISHED") this else replace(it.copy(state = "UNKNOWN", success = null, message = message,
             confirmation = it.confirmation.takeIf { keepConfirmation }))
     } ?: this
     fun recordConfirmation(id: Int, encodedIntent: String): SystemSessionLedger = find(id)?.let {
         if (it.state == "FINISHED") this else replace(it.copy(state = "CONFIRMATION", confirmation = encodedIntent,
-            message = "Подтвердите установку в системном окне"))
+            message = message("split_box_view_model_confirm_installation_in_the_system_dialog", "Подтвердите установку в системном окне")))
     } ?: this
     fun recordResult(id: Int, success: Boolean, message: String): SystemSessionLedger = find(id)?.let {
         if (it.state == "FINISHED") this else replace(it.copy(state = "FINISHED", success = success, message = message, confirmation = null))
@@ -75,7 +77,7 @@ internal suspend fun recoverSystemSession(stored: PendingInstall, isCurrent: () 
             abandon()
             if (!isCurrent()) return
             write(stored.copy(state = "FINISHED", success = false, confirmation = null,
-                message = "Подготовка системной сессии была прервана. Повторите установку."))
+                message = message("system_session_recovery_system_session_preparation_was_interrupted_try_instal", "Подготовка системной сессии была прервана. Повторите установку.")))
         }
         true -> if (stored.confirmation != null) confirm()
     }

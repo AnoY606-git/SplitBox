@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package dev.splitbox.app.data
 
+import dev.splitbox.core.message
+import dev.splitbox.core.nestedMessage
+
 import dev.splitbox.app.model.OperationResult
 import java.io.*
 import java.nio.ByteBuffer
@@ -36,10 +39,10 @@ data class PrivilegedOperationRecord(
     /** Восстановление использует только записанные доказательства; команды и повтор commit запрещены. */
     fun recoveryDecision(): PrivilegedRecoveryDecision = when (phase) {
         PrivilegedOperationPhase.COMMITTED -> PrivilegedRecoveryDecision.Known(OperationResult(true,
-            message ?: "Установка APK подтверждена Package Manager", packageName,
-            obbWarning ?: "APK установлен; завершение дополнительных действий не подтверждено."))
+            message ?: message("privileged_operation_store_apk_installation_confirmed_by_package_manager", "Установка APK подтверждена Package Manager"), packageName,
+            obbWarning ?: message("privileged_operation_store_apk_installed_completion_of_additional_actions_has", "APK установлен; завершение дополнительных действий не подтверждено.")))
         PrivilegedOperationPhase.FINISHED -> if (success != null) PrivilegedRecoveryDecision.Known(
-            OperationResult(success, message ?: if (success) "Приложение установлено" else "Установка завершилась ошибкой", packageName, obbWarning))
+            OperationResult(success, message ?: if (success) message("split_box_view_model_app_installed", "Приложение установлено") else message("privileged_operation_store_installation_failed", "Установка завершилась ошибкой"), packageName, obbWarning))
             else PrivilegedRecoveryDecision.Unknown
         else -> PrivilegedRecoveryDecision.Unknown
     }
@@ -62,27 +65,27 @@ class FilePrivilegedOperationStore(private val file: File) : PrivilegedOperation
     @Synchronized override fun read(): PrivilegedOperationRecord? {
         if (!file.exists()) return null
         try {
-            if (file.length() !in (HEADER_BYTES + DIGEST_BYTES).toLong()..MAX_FILE_BYTES.toLong()) throw IOException("Недопустимый размер записи привилегированной операции")
+            if (file.length() !in (HEADER_BYTES + DIGEST_BYTES).toLong()..MAX_FILE_BYTES.toLong()) throw IOException(message("privileged_operation_store_invalid_privileged_operation_record_size", "Недопустимый размер записи привилегированной операции"))
             return file.inputStream().buffered().use { input ->
                 val data = DataInputStream(input)
-                if (data.readInt() != MAGIC || data.readInt() != VERSION) throw IOException("Неизвестный формат записи привилегированной операции")
+                if (data.readInt() != MAGIC || data.readInt() != VERSION) throw IOException(message("privileged_operation_store_unknown_privileged_operation_record_format", "Неизвестный формат записи привилегированной операции"))
                 val length = data.readInt()
-                if (length !in 1..MAX_PAYLOAD_BYTES) throw IOException("Недопустимый размер данных операции")
+                if (length !in 1..MAX_PAYLOAD_BYTES) throw IOException(message("privileged_operation_store_invalid_operation_data_size", "Недопустимый размер данных операции"))
                 val payload = ByteArray(length).also(data::readFully)
                 val digest = ByteArray(DIGEST_BYTES).also(data::readFully)
-                if (data.read() != -1 || !MessageDigest.isEqual(digest, sha256(payload))) throw IOException("Повреждена запись привилегированной операции")
+                if (data.read() != -1 || !MessageDigest.isEqual(digest, sha256(payload))) throw IOException(message("privileged_operation_store_corrupt_privileged_operation_record", "Повреждена запись привилегированной операции"))
                 decode(payload).also(::validate)
             }
         } catch (e: IOException) { throw e }
-        catch (e: Exception) { throw IOException("Повреждена запись привилегированной операции", e) }
+        catch (e: Exception) { throw IOException(message("privileged_operation_store_corrupt_privileged_operation_record", "Повреждена запись привилегированной операции"), e) }
     }
 
     @Synchronized override fun write(record: PrivilegedOperationRecord) {
         val payload = try { validate(record); encode(record) }
         catch (e: IOException) { throw e }
-        catch (e: Exception) { throw IOException("Некорректная запись привилегированной операции", e) }
-        val parent = file.absoluteFile.parentFile ?: throw IOException("У записи операции нет каталога")
-        if (!parent.isDirectory && !parent.mkdirs()) throw IOException("Не удалось создать каталог записи операции")
+        catch (e: Exception) { throw IOException(message("privileged_operation_store_invalid_privileged_operation_record", "Некорректная запись привилегированной операции"), e) }
+        val parent = file.absoluteFile.parentFile ?: throw IOException(message("privileged_operation_store_the_operation_record_has_no_directory", "У записи операции нет каталога"))
+        if (!parent.isDirectory && !parent.mkdirs()) throw IOException(message("privileged_operation_store_could_not_create_the_operation_record_directory", "Не удалось создать каталог записи операции"))
         val temporary = File(parent, ".${file.name}.${UUID.randomUUID()}.tmp")
         try {
             FileOutputStream(temporary).use { output ->
@@ -101,17 +104,17 @@ class FilePrivilegedOperationStore(private val file: File) : PrivilegedOperation
     }
 
     @Synchronized override fun clear(operationId: String) {
-        if (read()?.operationId == operationId && !file.delete()) throw IOException("Не удалось удалить запись привилегированной операции")
+        if (read()?.operationId == operationId && !file.delete()) throw IOException(message("privileged_operation_store_could_not_delete_the_privileged_operation_record", "Не удалось удалить запись привилегированной операции"))
     }
 
     private fun validate(record: PrivilegedOperationRecord) {
-        require(UUID.fromString(record.operationId).toString() == record.operationId) { "Некорректный UUID операции" }
-        require(record.userId >= 0 && record.versionCode >= 0 && record.createdAt >= 0) { "Некорректные данные операции" }
-        require(record.sessionId == null || record.sessionId > 0) { "Некорректная сессия операции" }
-        require(Regex("[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)+").matches(record.packageName)) { "Некорректный пакет операции" }
-        require(record.phase != PrivilegedOperationPhase.FINISHED || record.success != null) { "Нет подтверждённого результата операции" }
-        require(record.phase != PrivilegedOperationPhase.COMMITTED || record.success != false) { "Противоречивый результат commit" }
-        require(record.success == null || record.phase in setOf(PrivilegedOperationPhase.COMMITTED, PrivilegedOperationPhase.FINISHED)) { "Результат записан до подтверждения операции" }
+        require(UUID.fromString(record.operationId).toString() == record.operationId) { message("privileged_operation_store_invalid_operation_uuid", "Некорректный UUID операции") }
+        require(record.userId >= 0 && record.versionCode >= 0 && record.createdAt >= 0) { message("privileged_operation_store_invalid_operation_data", "Некорректные данные операции") }
+        require(record.sessionId == null || record.sessionId > 0) { message("privileged_operation_store_invalid_operation_session", "Некорректная сессия операции") }
+        require(Regex("[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)+").matches(record.packageName)) { message("privileged_operation_store_invalid_operation_package", "Некорректный пакет операции") }
+        require(record.phase != PrivilegedOperationPhase.FINISHED || record.success != null) { message("privileged_operation_store_no_confirmed_operation_result", "Нет подтверждённого результата операции") }
+        require(record.phase != PrivilegedOperationPhase.COMMITTED || record.success != false) { message("privileged_operation_store_conflicting_commit_result", "Противоречивый результат commit") }
+        require(record.success == null || record.phase in setOf(PrivilegedOperationPhase.COMMITTED, PrivilegedOperationPhase.FINISHED)) { message("privileged_operation_store_the_result_was_recorded_before_the_operation", "Результат записан до подтверждения операции") }
     }
 
     private fun encode(record: PrivilegedOperationRecord): ByteArray {
@@ -125,7 +128,7 @@ class FilePrivilegedOperationStore(private val file: File) : PrivilegedOperation
             data.nullableString(record.message); data.nullableString(record.obbWarning)
             data.writeBoolean(record.cleanAfter); data.writeBoolean(record.saveHistory); data.nullableString(record.workDir)
         }
-        if (buffer.size() > MAX_PAYLOAD_BYTES) throw IOException("Превышен предел размера записи операции")
+        if (buffer.size() > MAX_PAYLOAD_BYTES) throw IOException(message("privileged_operation_store_operation_record_size_limit_exceeded", "Превышен предел размера записи операции"))
         return buffer.toByteArray()
     }
 
@@ -134,29 +137,29 @@ class FilePrivilegedOperationStore(private val file: File) : PrivilegedOperation
         val packageName = data.string(); val versionName = data.string(); val versionCode = data.readLong()
         val appLabel = data.string(); val sourceName = data.string(); val createdAt = data.readLong()
         val sessionId = data.readInt().let { if (it == -1) null else it }; val phase = PrivilegedOperationPhase.valueOf(data.string())
-        val success = when (data.readUnsignedByte()) { 0 -> null; 1 -> true; 2 -> false; else -> throw IOException("Некорректный результат операции") }
+        val success = when (data.readUnsignedByte()) { 0 -> null; 1 -> true; 2 -> false; else -> throw IOException(message("privileged_operation_store_invalid_operation_result", "Некорректный результат операции")) }
         val record = PrivilegedOperationRecord(operationId, backend, userId, packageName, versionName, versionCode, appLabel,
             sourceName, createdAt, sessionId, phase, success, data.nullableString(), data.nullableString(), data.boolean(), data.boolean(), data.nullableString())
-        if (data.read() != -1) throw IOException("Лишние данные в записи операции")
+        if (data.read() != -1) throw IOException(message("privileged_operation_store_extra_data_in_the_operation_record", "Лишние данные в записи операции"))
         record
     }
 
     private fun DataOutputStream.string(value: String) {
-        if (value.length > MAX_STRING_BYTES) throw IOException("Превышен предел длины поля операции")
+        if (value.length > MAX_STRING_BYTES) throw IOException(message("privileged_operation_store_operation_field_length_limit_exceeded", "Превышен предел длины поля операции"))
         val bytes = value.toByteArray(Charsets.UTF_8)
-        if (bytes.size > MAX_STRING_BYTES) throw IOException("Превышен предел длины поля операции")
+        if (bytes.size > MAX_STRING_BYTES) throw IOException(message("privileged_operation_store_operation_field_length_limit_exceeded", "Превышен предел длины поля операции"))
         writeInt(bytes.size); write(bytes)
     }
     private fun DataOutputStream.nullableString(value: String?) { writeBoolean(value != null); if (value != null) string(value) }
     private fun DataInputStream.string(): String {
         val length = readInt()
-        if (length !in 0..MAX_STRING_BYTES || length > available()) throw IOException("Некорректная длина поля операции")
+        if (length !in 0..MAX_STRING_BYTES || length > available()) throw IOException(message("privileged_operation_store_invalid_operation_field_length", "Некорректная длина поля операции"))
         val bytes = ByteArray(length).also(::readFully)
         return Charsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT).onUnmappableCharacter(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(bytes)).toString()
     }
     private fun DataInputStream.nullableString(): String? = if (boolean()) string() else null
     private fun DataInputStream.boolean(): Boolean = when (readUnsignedByte()) {
-        0 -> false; 1 -> true; else -> throw IOException("Некорректный признак поля операции")
+        0 -> false; 1 -> true; else -> throw IOException(message("privileged_operation_store_invalid_operation_field_flag", "Некорректный признак поля операции"))
     }
     private fun sha256(bytes: ByteArray) = MessageDigest.getInstance("SHA-256").digest(bytes)
     private companion object {

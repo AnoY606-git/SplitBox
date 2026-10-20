@@ -2,7 +2,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package dev.splitbox.app
 
+import dev.splitbox.core.message
+import dev.splitbox.core.nestedMessage
+
 import android.app.Application
+import android.app.LocaleManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -50,18 +54,23 @@ class SplitBoxViewModel(application: Application) : AndroidViewModel(application
     private val mutableNotice = MutableStateFlow<AppNotice?>(null)
     val notice: StateFlow<AppNotice?> = mutableNotice.asStateFlow()
     fun reportMessage(text: String, action: NoticeAction? = null) {
-        val safe = text.replace(Regex("(?:content|file)://[^\\s]+"), "[локальный URI скрыт]").take(6000)
+        val safe = MessageEnvelope.sanitize(text) { plain ->
+            plain.replace(Regex("(?:content|file)://[^\\s]+"), "[URI]").take(6000)
+        }
         mutableNotice.value = AppNotice(safe, action)
+    }
+    fun refreshLanguage() { settingsRepository.refreshLanguage() }
+    fun updateLanguage(language: AppLanguage) {
+        settingsRepository.update(settings.value.copy(language = language))
     }
     fun dismissNotice() { mutableNotice.value = null }
     private val mutableEvents = MutableSharedFlow<UiEvent>(extraBufferCapacity = 8)
     val events: SharedFlow<UiEvent> = mutableEvents.asSharedFlow()
     private var operation: Job? = null
-    private var accessJob: Job? = null
     private val lifecycleRecovery = LifecycleRecovery(viewModelScope)
     private var historyClearJob: Job? = null
     private val cleanupRetry = RetryablePersistenceAction { detail ->
-        reportMessage("Очистка не завершена: $detail. Освободите место и повторите сохранение.", NoticeAction.RETRY_SAVE)
+        reportMessage(message("split_box_view_model_cleanup_was_not_completed_free_up_space", "Очистка не завершена: %1\$s. Освободите место и повторите сохранение.", nestedMessage(detail)), NoticeAction.RETRY_SAVE)
         val state = mutableUi.value
         state.prepared?.let { prepared ->
             checkpointOwner = prepared.workDir.absolutePath
@@ -70,7 +79,7 @@ class SplitBoxViewModel(application: Application) : AndroidViewModel(application
         }
     }
     private val historyClearRetry = RetryablePersistenceAction { detail ->
-        reportMessage("История не удалена: $detail. Освободите место и повторите сохранение.", NoticeAction.RETRY_SAVE)
+        reportMessage(message("split_box_view_model_history_was_not_deleted_free_up_space", "История не удалена: %1\$s. Освободите место и повторите сохранение.", nestedMessage(detail)), NoticeAction.RETRY_SAVE)
     }
     private val privilegedMutex = Mutex()
     private val privilegedResults = PrivilegedResultPersistence(privilegedStore) { record, result ->
@@ -89,37 +98,45 @@ class SplitBoxViewModel(application: Application) : AndroidViewModel(application
     }
     private var checkpointOwner: String? = null
     private val selectionValidator = SelectionValidator(viewModelScope)
-    private val receivedListener = Shizuku.OnBinderReceivedListener { refreshAccess() }
-    private val deadListener = Shizuku.OnBinderDeadListener { refreshAccess() }
+    private val accessCoordinator by lazy {
+        AccessCoordinator(viewModelScope, rootBackend::requestAccess, {
+            val running = shizukuBackend.isRunning()
+            val granted = running && shizukuBackend.isGranted()
+            ShizukuAccess(running, granted, running && !granted &&
+                runCatching { Shizuku.shouldShowRequestPermissionRationale() }.getOrDefault(false))
+        }, shizukuBackend::requestPermission,
+            { !bootstrapSuccessful || operation?.isActive == true || journal.read()?.blocksNewOperation == true },
+            android.os.SystemClock::elapsedRealtime, ::publishAccess)
+    }
+    private val receivedListener = Shizuku.OnBinderReceivedListener { viewModelScope.launch { accessCoordinator.binderChanged() } }
+    private val deadListener = Shizuku.OnBinderDeadListener { viewModelScope.launch { accessCoordinator.binderDied() } }
     private val permissionListener = Shizuku.OnRequestPermissionResultListener { code, grant ->
-        if (code == 901) {
-            refreshAccess()
-            message(if (grant == PackageManager.PERMISSION_GRANTED) "Доступ Shizuku разрешён" else "Доступ Shizuku отклонён")
-        }
+        viewModelScope.launch { accessCoordinator.permissionResult(code, grant == PackageManager.PERMISSION_GRANTED) }
     }
     init {
         settingsRepository.sizeMigrationNotice?.let(::reportMessage)
         Shizuku.addBinderReceivedListenerSticky(receivedListener)
         Shizuku.addBinderDeadListener(deadListener)
         Shizuku.addRequestPermissionResultListener(permissionListener)
-        refreshAccess()
+        accessCoordinator.select(settings.value.backend)
         viewModelScope.launch {
             try {
                 journal.awaitReady()
                 restorePrivilegedOperation()
                 bootstrapSuccessful = true
                 bootstrap.complete(Unit)
+                accessCoordinator.resumed()
             } catch (e: Exception) {
                 bootstrap.completeExceptionally(e)
-                message("Не удалось восстановить журнал: ${e.message}. Новая установка заблокирована, чтобы не потерять результат предыдущей.")
-                mutableUi.value = UiState(OperationPhase.ERROR, "Журнал недоступен", "Освободите место и перезапустите SplitBox.")
+                message(message("split_box_view_model_could_not_restore_the_log_a_new", "Не удалось восстановить журнал: %1\$s. Новая установка заблокирована, чтобы не потерять результат предыдущей.", nestedMessage(e.message)))
+                mutableUi.value = UiState(OperationPhase.ERROR, message("split_box_view_model_log_unavailable", "Журнал недоступен"), message("split_box_view_model_free_up_space_and_restart_splitbox", "Освободите место и перезапустите SplitBox."))
             }
         }
         viewModelScope.launch {
             if (!awaitBootstrap()) return@launch
             journal.state.collect { stored ->
                 if (stored != null) try { consumeJournal(stored) }
-                catch (e: Exception) { message("Не удалось обработать результат Android: ${e.message}") }
+                catch (e: Exception) { message(message("split_box_view_model_could_not_process_the_android_result", "Не удалось обработать результат Android: %1\$s", nestedMessage(e.message))) }
             }
         }
         viewModelScope.launch(Dispatchers.IO) {
@@ -149,7 +166,7 @@ class SplitBoxViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             if (!awaitBootstrap()) return@launch
             journal.retained.collect { records -> records.filter { it.state == "FINISHED" }.forEach {
-                try { consumeRetained(it) } catch (e: Exception) { message("Не удалось сохранить поздний результат: ${e.message}") }
+                try { consumeRetained(it) } catch (e: Exception) { message(message("split_box_view_model_could_not_save_the_late_result", "Не удалось сохранить поздний результат: %1\$s", nestedMessage(e.message))) }
             } }
         }
         // Повторная доставка новому подписчику подавляется только после подтверждённого запуска Activity.
@@ -164,7 +181,7 @@ class SplitBoxViewModel(application: Application) : AndroidViewModel(application
     private fun busy(): Boolean = !bootstrapSuccessful || operation?.isActive == true || lifecycleRecovery.isActive || journal.read()?.blocksNewOperation == true
     private fun message(text: String) { reportMessage(text) }
     private fun device() = DeviceProfile(Build.VERSION.SDK_INT, Build.SUPPORTED_ABIS.toList(),
-        context.resources.displayMetrics.densityDpi, context.resources.configuration.locales.let { locales ->
+        context.resources.displayMetrics.densityDpi, context.getSystemService(LocaleManager::class.java).systemLocales.let { locales ->
             (0 until locales.size()).map { locales[it].toLanguageTag() }
         })
     private suspend fun refreshCache() {
@@ -193,8 +210,8 @@ class SplitBoxViewModel(application: Application) : AndroidViewModel(application
                 mutableUi.update { it.copy(savingSelection = false, selectionSaveError = null) }
                 if (mutableUi.value.phase == OperationPhase.READY) validateCurrentSelection()
             } catch (e: Exception) {
-                mutableUi.update { it.copy(savingSelection = false, selectionSaveError = e.message ?: "Не удалось сохранить состояние") }
-                reportMessage("Не удалось завершить сохранение: ${e.message}", NoticeAction.RETRY_SAVE)
+                mutableUi.update { it.copy(savingSelection = false, selectionSaveError = e.message ?: message("split_box_view_model_could_not_save_state", "Не удалось сохранить состояние")) }
+                reportMessage(message("split_box_view_model_could_not_finish_saving", "Не удалось завершить сохранение: %1\$s", nestedMessage(e.message)), NoticeAction.RETRY_SAVE)
             }
         }
     }
@@ -205,14 +222,14 @@ class SplitBoxViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun importUri(uri: Uri) {
-        if (uri.scheme != "content" && uri.scheme != "file") { message("Поддерживаются только content/file URI"); return }
+        if (uri.scheme != "content" && uri.scheme != "file") { message(message("split_box_view_model_only_content_file_uris_are_supported", "Поддерживаются только content/file URI")); return }
         startImport(listOf(uri))
     }
 
     fun importUris(uris: List<Uri>) {
         if (uris.isEmpty()) return
         val normalized = try { ImportSelection.normalize(uris.map(Uri::toString)) }
-        catch (e: IllegalArgumentException) { message(e.message ?: "Некорректный выбор файлов"); return }
+        catch (e: IllegalArgumentException) { message(e.message ?: message("split_box_view_model_invalid_file_selection", "Некорректный выбор файлов")); return }
         if (normalized.size == 1) importUri(normalized.single().toUri())
         else startImport(normalized.map(Uri::parse))
     }
@@ -220,12 +237,12 @@ class SplitBoxViewModel(application: Application) : AndroidViewModel(application
     private fun startImport(uris: List<Uri>) {
         if (!bootstrapSuccessful) {
             lifecycleRecovery.deferImport(bootstrap::await, { startImport(uris) }) {
-                message("Журнал установки недоступен: ${it.message}")
+                message(message("split_box_view_model_installation_log_unavailable", "Журнал установки недоступен: %1\$s", nestedMessage(it.message)))
             }
             return
         }
         val handoff = lifecycleRecovery.preemptForImport(operation?.isActive == true, journal.read())
-        if (handoff == null) { message("Дождитесь завершения текущей операции или отмените её"); return }
+        if (handoff == null) { message(message("split_box_view_model_wait_for_the_current_operation_to_finish", "Дождитесь завершения текущей операции или отмените её")); return }
         cleanupRetry.discard()
         journal.detachUnknown()
         journal.clearPreparedDirectory()
@@ -237,7 +254,7 @@ class SplitBoxViewModel(application: Application) : AndroidViewModel(application
             try {
                 // Старое чтение READY или permission continuation не может опубликоваться поверх нового URI.
                 handoff.awaitPrevious()
-                mutableUi.value = UiState(OperationPhase.COPYING, "Копирование файла", "Чтение выбранного URI", canCancel = true)
+                mutableUi.value = UiState(OperationPhase.COPYING, message("split_box_view_model_copying_file", "Копирование файла"), message("split_box_view_model_reading_selected_uri", "Чтение выбранного URI"), canCancel = true)
                 invalidateSelection()
                 archivePrivilegedRecord()
                 journal.flush()
@@ -254,21 +271,21 @@ class SplitBoxViewModel(application: Application) : AndroidViewModel(application
                         options.computeSha256, { !job.isActive },
                         { total, bytes -> mutableUi.update { it.copy(sourceBytes = total, copiedBytes = bytes,
                             progress = total?.takeIf { it > 0 }?.let { (bytes.toDouble() / it).coerceIn(0.0, 1.0).toFloat() },
-                            detail = "Скопировано ${bytes / (1024 * 1024)} МиБ") } },
+                            detail = message("split_box_view_model_copied_mib", "Скопировано %1\$s МиБ", bytes / (1024 * 1024))) } },
                         { detail, progress -> mutableUi.update { it.copy(phase = OperationPhase.ANALYZING,
-                            title = "Проверка пакета", detail = detail, progress = progress) } })
+                            title = message("split_box_view_model_checking_package", "Проверка пакета"), detail = detail, progress = progress) } })
                 }
                 currentSource = imported.source
                 val prepared = imported.prepared
                 val name = prepared.sourceName
                 val checked = withContext(Dispatchers.IO) {
-                    check(prepared.apks.size in 1..4096) { "Недопустимое количество APK" }
+                    check(prepared.apks.size in 1..4096) { message("split_box_view_model_invalid_number_of_apks", "Недопустимое количество APK") }
                     if (options.verifySignatures) {
-                        mutableUi.update { it.copy(detail = "Криптографическая проверка подписей APK", progress = null) }
+                        mutableUi.update { it.copy(detail = message("split_box_view_model_cryptographically_verifying_apk_signatures", "Криптографическая проверка подписей APK"), progress = null) }
                         stager.verifySignatures(prepared.apks, Build.VERSION.SDK_INT) { !job.isActive }
                     }
                     if (options.verifySignatures) prepared else prepared.copy(warnings = prepared.warnings +
-                        "Криптографическая проверка в SplitBox отключена. Android проверит подписи при установке.")
+                        message("split_box_view_model_cryptographic_verification_in_splitbox_is_disabled_andro", "Криптографическая проверка в SplitBox отключена. Android проверит подписи при установке."))
                 }
                 val sha = imported.sha256
                 val label = withContext(Dispatchers.IO) { appLabel(checked) }
@@ -278,7 +295,7 @@ class SplitBoxViewModel(application: Application) : AndroidViewModel(application
                     journal.savePreparedDirectory(checked.workDir.absolutePath)
                     journal.flush()
                 }
-                mutableUi.value = UiState(OperationPhase.READY, "Готово к установке", name,
+                mutableUi.value = UiState(OperationPhase.READY, message("split_box_view_model_ready_to_install", "Готово к установке"), name,
                     prepared = checked, selectedPaths = selected, sha256 = sha, appLabel = label)
                 checkpointOwner = checked.workDir.absolutePath
                 validateCurrentSelection()
@@ -295,7 +312,7 @@ class SplitBoxViewModel(application: Application) : AndroidViewModel(application
     private fun appLabel(prepared: PreparedPackage): String = runCatching {
         val base = prepared.apks.first { it.metadata.splitName == null }.file
         val info = context.packageManager.getPackageArchiveInfo(base.absolutePath, PackageManager.PackageInfoFlags.of(0))
-        val app = requireNotNull(info?.applicationInfo) { "Не удалось прочитать сведения о приложении из APK" }.apply { sourceDir = base.absolutePath; publicSourceDir = base.absolutePath }
+        val app = requireNotNull(info?.applicationInfo) { message("split_box_view_model_could_not_read_app_information_from_the", "Не удалось прочитать сведения о приложении из APK") }.apply { sourceDir = base.absolutePath; publicSourceDir = base.absolutePath }
         context.packageManager.getApplicationLabel(app).toString()
     }.getOrDefault(prepared.metadata.packageName)
 
@@ -304,7 +321,7 @@ class SplitBoxViewModel(application: Application) : AndroidViewModel(application
         val state = mutableUi.value
         val prepared = state.prepared ?: return
         val entry = prepared.apks.firstOrNull { it.archivePath == archivePath } ?: return
-        if (entry.locked) { message("Этот APK обязателен либо несовместим с устройством"); return }
+        if (entry.locked) { message(message("split_box_view_model_this_apk_is_required_or_incompatible_with", "Этот APK обязателен либо несовместим с устройством")); return }
         val selected = state.selectedPaths.toMutableSet().apply { if (!add(archivePath)) remove(archivePath) }
         mutableUi.update { it.copy(selectedPaths = selected, savingSelection = true,
             selectionSaveError = null, selectionValidationPending = true, selectionError = null) }
@@ -313,11 +330,11 @@ class SplitBoxViewModel(application: Application) : AndroidViewModel(application
         validateCurrentSelection()
     }
     fun install() {
-        if (busy()) { message("Установка уже выполняется"); return }
+        if (busy()) { message(message("split_box_view_model_installation_is_already_in_progress", "Установка уже выполняется")); return }
         val before = mutableUi.value
         val prepared = before.prepared ?: return
         if (before.selectionValidationPending || before.selectionError != null) {
-            message(before.selectionError ?: "Дождитесь проверки выбранных APK"); return
+            message(before.selectionError ?: message("split_box_view_model_wait_for_the_selected_apks_to_be", "Дождитесь проверки выбранных APK")); return
         }
         cleanupRetry.discard()
         val options = settings.value
@@ -338,24 +355,24 @@ class SplitBoxViewModel(application: Application) : AndroidViewModel(application
                     val source = currentSource ?: prepared.apks.single { it.metadata.splitName == null }.file
                     journal.saveAwaitingPermission(source.absolutePath, prepared.sourceName, prepared.workDir.absolutePath)
                     journal.flush()
-                    mutableUi.update { it.copy(phase = OperationPhase.WAITING_USER, title = "Требуется разрешение", canCancel = true,
-                        detail = "Разрешите SplitBox устанавливать приложения и вернитесь назад") }
+                    mutableUi.update { it.copy(phase = OperationPhase.WAITING_USER, title = message("split_box_view_model_permission_required", "Требуется разрешение"), canCancel = true,
+                        detail = message("split_box_view_model_allow_splitbox_to_install_apps_then_return", "Разрешите SplitBox устанавливать приложения и вернитесь назад")) }
                     mutableEvents.emit(UiEvent.LaunchIntent(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${context.packageName}"))))
                     return@launch
                 }
                 journal.clearAwaitingPermission()
                 journal.flush()
-                mutableUi.update { it.copy(phase = OperationPhase.INSTALLING, title = "Установка приложения", progress = null,
+                mutableUi.update { it.copy(phase = OperationPhase.INSTALLING, title = message("split_box_view_model_installing_app", "Установка приложения"), progress = null,
                     result = null, canCancel = true, pendingPackageName = null) }
                 val apks = prepared.apks.map { it.copy(selected = it.archivePath in before.selectedPaths) }
                 val selected = apks.filter { it.selected }
                 val job = currentCoroutineContext().job
                 withContext(Dispatchers.IO) {
-                    check(selected.size in 1..4096) { "Выберите корректный набор APK" }
+                    check(selected.size in 1..4096) { message("split_box_view_model_select_a_valid_set_of_apks", "Выберите корректный набор APK") }
                     validateSelection(apks)
                     selected.forEach { entry ->
-                        check(entry.file.isFile && entry.file.length() == entry.size && entry.size > 0) { "Временный APK изменился или удалён. Выберите файл заново." }
-                        check(entry.file.canonicalFile.toPath().startsWith(prepared.workDir.canonicalFile.toPath())) { "APK находится вне закрытого кэша приложения" }
+                        check(entry.file.isFile && entry.file.length() == entry.size && entry.size > 0) { message("split_box_view_model_the_temporary_apk_has_changed_or_been", "Временный APK изменился или удалён. Выберите файл заново.") }
+                        check(entry.file.canonicalFile.toPath().startsWith(prepared.workDir.canonicalFile.toPath())) { message("split_box_view_model_the_apk_is_outside_the_app_s", "APK находится вне закрытого кэша приложения") }
                     }
                     // Исходник и распакованные данные уже занимают кэш; сессии Android нужна ещё одна копия APK.
                     val sessionBytes = selected.fold(0L) { sum, entry -> Math.addExact(sum, entry.size) }
@@ -376,7 +393,7 @@ class SplitBoxViewModel(application: Application) : AndroidViewModel(application
                     }, onCommitStarted = {
                         tracker?.commitStarted()
                         mutableUi.update { it.copy(canCancel = false) }
-                    }, onSessionCreated = { tracker?.sessionCreated(it) }, onObbCopyStarted = { mutableUi.update { it.copy(title = "Перенос OBB", canCancel = true) } })
+                    }, onSessionCreated = { tracker?.sessionCreated(it) }, onObbCopyStarted = { mutableUi.update { it.copy(title = message("split_box_view_model_transferring_obb", "Перенос OBB"), canCancel = true) } })
                 backendStarted = true
                 when (val outcome = registry.select(options.backend).install(request) { detail, progress ->
                     mutableUi.update { it.copy(detail = detail, progress = progress) }
@@ -391,8 +408,8 @@ class SplitBoxViewModel(application: Application) : AndroidViewModel(application
             } catch (e: UncertainInstallException) {
                 withContext(NonCancellable) {
                     val record = tracker?.current
-                    if (record != null) showPrivilegedUnknown(record, e.message ?: "Результат установки не подтверждён", prepared)
-                    else message(e.message ?: "Результат установки не подтверждён")
+                    if (record != null) showPrivilegedUnknown(record, e.message ?: message("split_box_view_model_installation_result_not_confirmed", "Результат установки не подтверждён"), prepared)
+                    else message(e.message ?: message("split_box_view_model_installation_result_not_confirmed", "Результат установки не подтверждён"))
                 }
             } catch (e: Exception) {
                 withContext(NonCancellable) {
@@ -423,13 +440,13 @@ class SplitBoxViewModel(application: Application) : AndroidViewModel(application
                         }
                         val detail = listOfNotNull(e.message, restored.exceptionOrNull()?.message).distinct().joinToString(". ")
                         mutableUi.update { it.copy(phase = OperationPhase.READY, savingSelection = false,
-                            selectionSaveError = "Не удалось сохранить состояние: $detail", canCancel = false) }
-                        reportMessage("Установка не начата.\n$detail", NoticeAction.RETRY_SAVE)
+                            selectionSaveError = message("split_box_view_model_could_not_save_state_2", "Не удалось сохранить состояние: %1\$s", nestedMessage(detail)), canCancel = false) }
+                        reportMessage(message("split_box_view_model_installation_did_not_start", "Установка не начата.\n%1\$s", nestedMessage(detail)), NoticeAction.RETRY_SAVE)
                     } else if (journal.read() == null && !systemResultHandled) {
                         val result = if (apkCommitted || tracker?.hasCommitProof == true)
-                            OperationResult(true, "Установка APK подтверждена", prepared.metadata.packageName,
-                                "Завершение дополнительных действий не подтверждено. При необходимости экспортируйте OBB.")
-                        else OperationResult(false, if (e is CancellationException) "Установка отменена" else e.message ?: "Ошибка установки", prepared.metadata.packageName)
+                            OperationResult(true, message("split_box_view_model_apk_installation_confirmed", "Установка APK подтверждена"), prepared.metadata.packageName,
+                                message("split_box_view_model_completion_of_additional_actions_has_not_been", "Завершение дополнительных действий не подтверждено. При необходимости экспортируйте OBB."))
+                        else OperationResult(false, if (e is CancellationException) message("split_box_view_model_installation_canceled", "Установка отменена") else e.message ?: message("split_box_view_model_installation_error", "Ошибка установки"), prepared.metadata.packageName)
                         val record = tracker?.current
                         if (record != null) completePrivileged(record, result, prepared)
                         else finish(result, prepared, options, before.appLabel ?: prepared.metadata.packageName, UUID.randomUUID().toString())
@@ -443,13 +460,13 @@ class SplitBoxViewModel(application: Application) : AndroidViewModel(application
     private fun privilegedHistory(record: PrivilegedOperationRecord, result: OperationResult?) = HistoryEntry(
         record.operationId, record.createdAt, record.appLabel, record.packageName, record.versionName,
         record.sourceName, BackendMode.valueOf(record.backend.name), result?.success,
-        listOfNotNull(result?.message ?: record.message ?: "Результат установки не подтверждён", result?.obbWarning).joinToString("\n"))
+        listOfNotNull(result?.message ?: record.message ?: message("split_box_view_model_installation_result_not_confirmed", "Результат установки не подтверждён"), result?.obbWarning).joinToString("\n"))
     private suspend fun archivePrivilegedRecord() = privilegedMutex.withLock {
         withContext(Dispatchers.IO) { privilegedResults.archive() }
     }
     private suspend fun retryCompletedPersistence() {
         retryFinishedResults(journal::read, { journal.retained.value }, ::consumeJournal, ::consumeRetained) {
-            reportMessage("Не удалось сохранить результат Android: ${it.message}", NoticeAction.RETRY_SAVE)
+            reportMessage(message("split_box_view_model_could_not_save_the_android_result", "Не удалось сохранить результат Android: %1\$s", nestedMessage(it.message)), NoticeAction.RETRY_SAVE)
         }
         val pending = withContext(Dispatchers.IO) { privilegedResults.pending() }
         pending.forEach { record ->
@@ -472,30 +489,30 @@ class SplitBoxViewModel(application: Application) : AndroidViewModel(application
         when (decision) {
             is PrivilegedRecoveryDecision.Known -> completePrivileged(record, decision.result, prepared?.prepared)
             PrivilegedRecoveryDecision.Unknown -> showPrivilegedUnknown(record,
-                record.message ?: "Работа ${record.backend.name} была прервана. Окончательный результат не подтверждён. Проверьте приложение перед повторной установкой.", prepared?.prepared)
+                record.message ?: message("split_box_view_model_the_operation_was_interrupted_the_final_result", "Работа %1\$s была прервана. Окончательный результат не подтверждён. Проверьте приложение перед повторной установкой.", record.backend.name), prepared?.prepared)
         }
     }
     private suspend fun showPrivilegedUnknown(record: PrivilegedOperationRecord, detail: String, prepared: PreparedPackage?) {
         val unknown = record.copy(phase = PrivilegedOperationPhase.UNKNOWN, success = null, message = detail)
         withContext(Dispatchers.IO) {
-            runCatching { privilegedStore.write(unknown) }.onFailure { message("Не удалось сохранить неопределённый результат: ${it.message}") }
+            runCatching { privilegedStore.write(unknown) }.onFailure { message(message("split_box_view_model_could_not_save_the_uncertain_result", "Не удалось сохранить неопределённый результат: %1\$s", nestedMessage(it.message))) }
             if (record.saveHistory) runCatching { historyRepository.add(privilegedHistory(unknown, null)) }
-                .onFailure { message("Не удалось сохранить историю: ${it.message}") }
+                .onFailure { message(message("split_box_view_model_could_not_save_history", "Не удалось сохранить историю: %1\$s", nestedMessage(it.message))) }
         }
-        mutableUi.update { it.copy(phase = OperationPhase.UNKNOWN, title = "Результат не подтверждён", detail = detail,
+        mutableUi.update { it.copy(phase = OperationPhase.UNKNOWN, title = message("split_box_view_model_result_not_confirmed", "Результат не подтверждён"), detail = detail,
             prepared = prepared, result = null, progress = null, canCancel = false, pendingPackageName = record.packageName) }
     }
     private suspend fun completePrivileged(record: PrivilegedOperationRecord, result: OperationResult, prepared: PreparedPackage?) = privilegedMutex.withLock {
         val finalRecord = privilegedResults.remember(record, result)
         val persisted = withContext(Dispatchers.IO) { runCatching { privilegedResults.persist(finalRecord) } }
         persisted.exceptionOrNull()?.let {
-            reportMessage("Результат установки известен, но сохранение не завершено: ${it.message}", NoticeAction.RETRY_SAVE)
+            reportMessage(message("split_box_view_model_the_installation_result_is_known_but_saving", "Результат установки известен, но сохранение не завершено: %1\$s", nestedMessage(it.message)), NoticeAction.RETRY_SAVE)
         }
         val options = settings.value.copy(backend = BackendMode.valueOf(record.backend.name), cleanAfterInstall = record.cleanAfter, saveHistory = false)
         val finished = finish(result, prepared, options, record.appLabel, record.operationId, cleanupDirectory = record.workDir)
         if (persisted.isSuccess && finished) withContext(Dispatchers.IO) {
             runCatching { privilegedResults.clear(record.operationId) }.onFailure {
-                reportMessage("Не удалось завершить запись операции: ${it.message}", NoticeAction.RETRY_SAVE)
+                reportMessage(message("split_box_view_model_could_not_finish_writing_the_operation_record", "Не удалось завершить запись операции: %1\$s", nestedMessage(it.message)), NoticeAction.RETRY_SAVE)
             }
         }
     }
@@ -510,12 +527,12 @@ class SplitBoxViewModel(application: Application) : AndroidViewModel(application
             keepForObb = finishPreparedStorage(result, prepared, (stored?.workDir ?: cleanupDirectory)?.let(::File),
                 options.cleanAfterInstall, journal::savePreparedDirectory, { journal.clearPreparedDirectory() }, journal::flush, stager::delete)
         } }
-        persistence.exceptionOrNull()?.let { reportMessage("Результат установки известен, но сохранение или очистка не завершены: ${it.message}", NoticeAction.RETRY_SAVE) }
+        persistence.exceptionOrNull()?.let { reportMessage(message("split_box_view_model_the_installation_result_is_known_but_saving_2", "Результат установки известен, но сохранение или очистка не завершены: %1\$s", nestedMessage(it.message)), NoticeAction.RETRY_SAVE) }
         val retained = if (persistence.isFailure || !options.cleanAfterInstall || keepForObb) prepared else null
         val displayedResult = if (keepForObb) result.copy(obbWarning = result.obbWarning +
-            " Пакет с OBB сохранён для экспорта после перезапуска. Очистите кэш после экспорта.") else result
+            message("split_box_view_model_the_package_containing_obb_files_has_been", " Пакет с OBB сохранён для экспорта после перезапуска. Очистите кэш после экспорта.")) else result
         mutableUi.update { it.copy(phase = if (result.success) OperationPhase.SUCCESS else OperationPhase.ERROR,
-            title = if (result.success) "Приложение установлено" else "Установка не выполнена", detail = result.message,
+            title = if (result.success) message("split_box_view_model_app_installed", "Приложение установлено") else message("split_box_view_model_installation_failed", "Установка не выполнена"), detail = result.message,
             progress = null, prepared = retained, result = displayedResult, canCancel = false, pendingPackageName = null) }
         if (retained == null) { activeDirectory = null; currentSource = null }
         refreshCache()
@@ -541,19 +558,19 @@ class SplitBoxViewModel(application: Application) : AndroidViewModel(application
                 }
             }
         } else if (current.state == "UNKNOWN") {
-            mutableUi.update { it.copy(phase = OperationPhase.UNKNOWN, title = "Результат не подтверждён", detail = current.message,
+            mutableUi.update { it.copy(phase = OperationPhase.UNKNOWN, title = message("split_box_view_model_result_not_confirmed", "Результат не подтверждён"), detail = current.message,
                 result = null, progress = null, canCancel = false, pendingPackageName = current.packageName) }
         } else {
             mutableUi.update { it.copy(phase = if (current.state == "WRITING") OperationPhase.INSTALLING else OperationPhase.WAITING_USER,
-                canCancel = current.state == "WRITING", title = if (current.state == "WRITING") "Запись APK" else "Ожидание Android",
-                detail = current.message.ifBlank { "Android обрабатывает сессию ${current.sessionId}" }, progress = null) }
+                canCancel = current.state == "WRITING", title = if (current.state == "WRITING") message("split_box_view_model_writing_apk", "Запись APK") else message("split_box_view_model_waiting_for_android", "Ожидание Android"),
+                detail = current.message.ifBlank { message("split_box_view_model_android_is_processing_session", "Android обрабатывает сессию %1\$s", current.sessionId) }, progress = null) }
             if (current.state == "CONFIRMATION") offerConfirmation(current)
         }
     }
     private fun applyRestored(value: PreparedSnapshot.Restored) {
         activeDirectory = value.prepared.workDir
         currentSource = null
-        mutableUi.value = UiState(OperationPhase.READY, "Подготовленный пакет восстановлен", value.prepared.sourceName,
+        mutableUi.value = UiState(OperationPhase.READY, message("split_box_view_model_prepared_package_restored", "Подготовленный пакет восстановлен"), value.prepared.sourceName,
             prepared = value.prepared, selectedPaths = value.selected, sha256 = value.sha256, appLabel = value.label)
         checkpointOwner = value.prepared.workDir.absolutePath
         validateCurrentSelection()
@@ -572,7 +589,7 @@ class SplitBoxViewModel(application: Application) : AndroidViewModel(application
         if (journal.find(record.sessionId) != record || journal.read()?.sessionId == record.sessionId) return@withLock
         journal.consume(record.sessionId)
         journal.flush()
-        message("Поздний результат Android для ${record.appLabel}: ${record.message}")
+        message(message("split_box_view_model_late_android_result_for", "Поздний результат Android для %1\$s: %2\$s", record.appLabel, nestedMessage(record.message)))
     }
     private suspend fun offerConfirmation(value: PendingInstall) {
         if (mutableEvents.subscriptionCount.value == 0 || !journal.isCurrent(value) || !journal.isLaunchCurrent(value.confirmationToken)) return
@@ -582,7 +599,7 @@ class SplitBoxViewModel(application: Application) : AndroidViewModel(application
             return
         }
         try { journal.flush() }
-        catch (e: Exception) { message("Подтверждение Android не сохранено: ${e.message}. Освободите место и проверьте статус снова."); return }
+        catch (e: Exception) { message(message("split_box_view_model_android_confirmation_was_not_saved_free_up", "Подтверждение Android не сохранено: %1\$s. Освободите место и проверьте статус снова.", nestedMessage(e.message))); return }
         if (mutableEvents.subscriptionCount.value == 0 || !journal.isCurrent(value) ||
             !journal.isLaunchCurrent(value.confirmationToken) || !confirmationDelivery.offer(value.confirmationToken)) return
         mutableEvents.emit(UiEvent.LaunchIntent(intent, value.confirmationToken))
@@ -595,7 +612,7 @@ class SplitBoxViewModel(application: Application) : AndroidViewModel(application
         val record = journal.read()?.takeIf { it.confirmationToken == token && it.state != "FINISHED" } ?: return
         confirmationDelivery.acknowledge(token, launched)
         if (!launched) journal.markLaunchFailed(record.sessionId)
-        else if (record.state == "UNKNOWN") journal.write(record.copy(state = "CONFIRMATION", message = "Подтвердите установку в системном окне"))
+        else if (record.state == "UNKNOWN") journal.write(record.copy(state = "CONFIRMATION", message = message("split_box_view_model_confirm_installation_in_the_system_dialog", "Подтвердите установку в системном окне")))
     }
     private suspend fun restoreReadyPackage() {
         fun idleForRestore(): Boolean = mutableUi.value.phase == OperationPhase.IDLE && operation?.isActive != true &&
@@ -609,7 +626,7 @@ class SplitBoxViewModel(application: Application) : AndroidViewModel(application
         if (journal.preparedDirectory() != directory || !idleForRestore()) return
         if (restored == null) {
             journal.clearPreparedDirectory(directory)
-            message("Готовый пакет больше не доступен в кэше. Выберите файл заново.")
+            message(message("split_box_view_model_the_prepared_package_is_no_longer_available", "Готовый пакет больше не доступен в кэше. Выберите файл заново."))
             return
         }
         applyRestored(restored)
@@ -617,7 +634,7 @@ class SplitBoxViewModel(application: Application) : AndroidViewModel(application
     /** Пояснение неопределённого привилегированного итога открывается только по действию пользователя. */
     fun checkStatus() {
         if (journal.read() == null && mutableUi.value.phase == OperationPhase.UNKNOWN) {
-            message("Автоматического подтверждения результата Root/Shizuku нет. Откройте приложение и проверьте его версию. Повторная установка возможна только по вашему явному действию.")
+            message(message("split_box_view_model_root_shizuku_results_cannot_be_confirmed_automatically", "Автоматического подтверждения результата Root/Shizuku нет. Откройте приложение и проверьте его версию. Повторная установка возможна только по вашему явному действию."))
         } else onHostResumed()
     }
     fun onHostResumed() {
@@ -653,7 +670,7 @@ class SplitBoxViewModel(application: Application) : AndroidViewModel(application
                     if (journal.awaitingPermission() != resume || journal.read() != null || operation?.isActive == true) return@start
                     if (restored == null) {
                         journal.clearAwaitingPermission()
-                        mutableUi.value = UiState(OperationPhase.ERROR, "Временный пакет недоступен", "Выберите файл заново. Доступ к исходному URI мог истечь.")
+                        mutableUi.value = UiState(OperationPhase.ERROR, message("split_box_view_model_temporary_package_unavailable", "Временный пакет недоступен"), message("split_box_view_model_select_the_file_again_access_to_the", "Выберите файл заново. Доступ к исходному URI мог истечь."))
                         return@start
                     }
                     applyRestored(restored)
@@ -671,14 +688,14 @@ class SplitBoxViewModel(application: Application) : AndroidViewModel(application
                 if (context.packageManager.canRequestPackageInstalls()) {
                     lifecycleRecovery.release()
                     install()
-                } else mutableUi.update { it.copy(phase = OperationPhase.READY, title = "Требуется разрешение", canCancel = false,
-                    detail = "Установка из этого источника ещё не разрешена. Нажмите «Установить», чтобы открыть разрешение снова.") }
+                } else mutableUi.update { it.copy(phase = OperationPhase.READY, title = message("split_box_view_model_permission_required", "Требуется разрешение"), canCancel = false,
+                    detail = message("split_box_view_model_installation_from_this_source_is_not_yet", "Установка из этого источника ещё не разрешена. Нажмите «Установить», чтобы открыть разрешение снова.")) }
             } catch (e: CancellationException) { throw e }
-            catch (e: Exception) { reportMessage("Не удалось восстановить состояние: ${e.message}", NoticeAction.RETRY_SAVE) }
+            catch (e: Exception) { reportMessage(message("split_box_view_model_could_not_restore_state", "Не удалось восстановить состояние: %1\$s", nestedMessage(e.message)), NoticeAction.RETRY_SAVE) }
         }
     }
     fun cancelOperation() {
-        if (!mutableUi.value.canCancel) { message("Передача установки Android уже началась. Дождитесь результата."); return }
+        if (!mutableUi.value.canCancel) { message(message("split_box_view_model_installation_has_already_been_handed_over_to", "Передача установки Android уже началась. Дождитесь результата.")); return }
         if (cancelObbExport(mutableUi.value, operation)) return
         val stored = journal.read()
         if (stored != null && stored.state != "FINISHED") {
@@ -686,13 +703,13 @@ class SplitBoxViewModel(application: Application) : AndroidViewModel(application
                 val error = withContext(Dispatchers.IO) { runCatching { context.packageManager.packageInstaller.abandonSession(stored.sessionId) }.exceptionOrNull() }
                 if (error == null) {
                     val latest = journal.read()
-                    if (latest?.sessionId == stored.sessionId && latest.state != "FINISHED") journal.write(latest.copy(state = "FINISHED", success = false, message = "Установка отменена"))
-                } else message("Android уже обрабатывает установку: ${error.message}")
+                    if (latest?.sessionId == stored.sessionId && latest.state != "FINISHED") journal.write(latest.copy(state = "FINISHED", success = false, message = message("split_box_view_model_installation_canceled", "Установка отменена")))
+                } else message(message("split_box_view_model_android_is_already_processing_the_installation", "Android уже обрабатывает установку: %1\$s", nestedMessage(error.message)))
             }
         } else if (operation?.isActive == true) operation?.cancel()
         else {
             journal.awaitingPermission()?.let { journal.returnPermissionToReady(it.third) }
-            mutableUi.update { it.copy(phase = if (it.prepared == null) OperationPhase.IDLE else OperationPhase.READY, title = "Операция отменена", canCancel = false) }
+            mutableUi.update { it.copy(phase = if (it.prepared == null) OperationPhase.IDLE else OperationPhase.READY, title = message("split_box_view_model_operation_canceled", "Операция отменена"), canCancel = false) }
         }
     }
     fun reset() {
@@ -716,23 +733,32 @@ class SplitBoxViewModel(application: Application) : AndroidViewModel(application
     fun updateSettings(value: AppSettings) {
         if (journal.isReady && value.backend != settings.value.backend)
             journal.awaitingPermission()?.let { journal.returnPermissionToReady(it.third) }
-        runCatching { settingsRepository.update(value) }.onFailure { message(it.message ?: "Некорректная настройка") }
+        runCatching { settingsRepository.update(value) }
+            .onSuccess { accessCoordinator.select(value.backend) }
+            .onFailure { message(it.message ?: message("split_box_view_model_invalid_setting", "Некорректная настройка")) }
     }
-    fun refreshAccess() {
-        val running = shizukuBackend.isRunning()
-        val granted = shizukuBackend.isGranted()
-        mutableAccess.update { it.copy(shizukuRunning = running, shizukuGranted = granted,
-            shizukuStatus = when { granted -> "Shizuku подключён, доступ разрешён"; running -> "Shizuku работает, требуется разрешение"; else -> "Shizuku не подключён" }) }
-    }
-    fun requestRootAccess() {
-        if (accessJob?.isActive == true || busy()) return
-        mutableAccess.update { it.copy(rootStatus = "Ожидание менеджера Root…") }
-        accessJob = viewModelScope.launch {
-            val granted = runCatching { rootBackend.requestAccess() }.getOrDefault(false)
-            mutableAccess.update { it.copy(rootGranted = granted, rootStatus = if (granted) "Root подтверждён явной проверкой" else "Root недоступен или запрос отклонён") }
+    fun refreshAccess() = accessCoordinator.resumed()
+    fun requestRootAccess() { if (settings.value.backend == BackendMode.ROOT) accessCoordinator.retry() }
+    fun requestShizukuAccess() { if (settings.value.backend == BackendMode.SHIZUKU) accessCoordinator.retry() }
+    private fun publishAccess(snapshot: AccessSnapshot) {
+        val root = when (snapshot.root) {
+            RootAccessStatus.UNCHECKED -> "unchecked" to "Доступ Root не проверен"
+            RootAccessStatus.CHECKING -> "checking" to "Проверка Root…"
+            RootAccessStatus.GRANTED -> "granted" to "Доступ Root разрешён"
+            RootAccessStatus.DENIED -> "denied" to "Root недоступен или запрос отклонён"
         }
+        val shizuku = when (snapshot.shizuku) {
+            ShizukuAccessStatus.STOPPED -> "stopped" to "Shizuku не запущен"
+            ShizukuAccessStatus.NEEDS_PERMISSION -> "needs_permission" to "Shizuku работает, требуется разрешение"
+            ShizukuAccessStatus.REQUESTING -> "requesting" to "Ожидание разрешения Shizuku…"
+            ShizukuAccessStatus.GRANTED -> "granted" to "Доступ Shizuku разрешён"
+            ShizukuAccessStatus.DENIED -> "denied" to "Доступ Shizuku отклонён. Запросите его повторно."
+            ShizukuAccessStatus.PERMANENTLY_DENIED -> "permanently_denied" to "Доступ заблокирован. Разрешите его в Shizuku."
+        }
+        mutableAccess.value = AccessState(message("access_root_${root.first}", root.second),
+            snapshot.root == RootAccessStatus.GRANTED, snapshot.shizuku != ShizukuAccessStatus.STOPPED,
+            snapshot.shizuku == ShizukuAccessStatus.GRANTED, message("access_shizuku_${shizuku.first}", shizuku.second))
     }
-    fun requestShizukuAccess() { runCatching { shizukuBackend.requestPermission() }.onFailure { message(it.message ?: "Shizuku недоступен") } }
     fun clearHistory() {
         if (historyClearJob?.isActive == true) return
         historyClearJob = viewModelScope.launch {
@@ -740,7 +766,7 @@ class SplitBoxViewModel(application: Application) : AndroidViewModel(application
         }
     }
     fun clearCache() {
-        if (busy()) { message("Очистка недоступна во время операции"); return }
+        if (busy()) { message(message("split_box_view_model_cleanup_is_unavailable_during_an_operation", "Очистка недоступна во время операции")); return }
         operation = viewModelScope.launch {
             cleanupRetry.run {
                 invalidateSelection()
@@ -751,35 +777,35 @@ class SplitBoxViewModel(application: Application) : AndroidViewModel(application
                 journal.flush()
                 withContext(Dispatchers.IO) { stager.clearExcept(emptySet()) }
                 activeDirectory = null; currentSource = null; restoredPermission = false
-                mutableUi.value = UiState(title = "Временные файлы удалены")
+                mutableUi.value = UiState(title = message("split_box_view_model_temporary_files_deleted", "Временные файлы удалены"))
                 refreshCache()
             }
         }
     }
     fun exportObb(destination: Uri) {
-        if (busy()) { message("Дождитесь завершения операции"); return }
+        if (busy()) { message(message("split_box_view_model_wait_for_the_operation_to_finish", "Дождитесь завершения операции")); return }
         cleanupRetry.discard()
         val before = mutableUi.value
         val prepared = before.prepared ?: return
-        if (prepared.obbFiles.isEmpty()) { message("В пакете нет OBB"); return }
+        if (prepared.obbFiles.isEmpty()) { message(message("split_box_view_model_the_package_contains_no_obb_files", "В пакете нет OBB")); return }
         operation = viewModelScope.launch {
             try {
                 runObbExport(before, mutableUi, { checkpointOwner }, { selectionWrites.state.value }, { selectionValidator.state.value }) {
                     val job = currentCoroutineContext().job
                     withContext(Dispatchers.IO) {
                         val names = HashSet<String>()
-                        val output = context.contentResolver.openOutputStream(destination, "wt") ?: throw IOException("Не удалось открыть место экспорта")
+                        val output = context.contentResolver.openOutputStream(destination, "wt") ?: throw IOException(message("split_box_view_model_could_not_open_the_export_location", "Не удалось открыть место экспорта"))
                         val totalBytes = prepared.obbFiles.fold(0L) { sum, entry -> Math.addExact(sum, entry.size) }
                         var exported = 0L
                         val reporting = TransferProgress(totalBytes) { bytes, fraction -> mutableUi.update {
-                            it.copy(detail = "Экспортировано ${bytes / 1048576} МиБ", progress = fraction, sourceBytes = totalBytes, copiedBytes = bytes)
+                            it.copy(detail = message("split_box_view_model_exported_mib", "Экспортировано %1\$s МиБ", bytes / 1048576), progress = fraction, sourceBytes = totalBytes, copiedBytes = bytes)
                         } }
                         ZipOutputStream(output).use { zip ->
                             prepared.obbFiles.forEach { entry ->
                                 val name = entry.archivePath.substringAfterLast('/')
                                 ObbPolicy.destination(Process.myUid() / 100000, prepared.metadata.packageName, prepared.metadata.versionCode, name)
-                                check(names.add(name)) { "Повторяющееся имя OBB" }
-                                check(entry.file.isFile && entry.file.length() == entry.size) { "OBB уже удалён из кэша. Выберите исходный архив заново." }
+                                check(names.add(name)) { message("split_box_view_model_duplicate_obb_name", "Повторяющееся имя OBB") }
+                                check(entry.file.isFile && entry.file.length() == entry.size) { message("split_box_view_model_the_obb_file_has_already_been_removed", "OBB уже удалён из кэша. Выберите исходный архив заново.") }
                                 zip.putNextEntry(ZipEntry("${prepared.metadata.packageName}/$name"))
                                 entry.file.inputStream().use { input ->
                                     val buffer = ByteArray(65536)
@@ -797,19 +823,19 @@ class SplitBoxViewModel(application: Application) : AndroidViewModel(application
                         }
                     }
                 }
-                message("OBB экспортированы в ZIP")
+                message(message("split_box_view_model_obb_files_exported_to_zip", "OBB экспортированы в ZIP"))
             } catch (e: Exception) {
-                message("Экспорт не завершён: ${e.message ?: "отменён"}. Неполный ZIP можно удалить в выбранной папке.")
+                message(message("split_box_view_model_export_was_not_completed_you_can_delete", "Экспорт не завершён: %1\$s. Неполный ZIP можно удалить в выбранной папке.", nestedMessage(e.message ?: message("split_box_view_model_canceled", "отменён"))))
             } finally { withContext(NonCancellable) { refreshCache() } }
         }
     }
     fun openInstalledApp(packageName: String) {
         val intent = context.packageManager.getLaunchIntentForPackage(packageName)
-        if (intent == null) message("У приложения нет доступного экрана запуска")
+        if (intent == null) message(message("split_box_view_model_the_app_has_no_launchable_screen", "У приложения нет доступного экрана запуска"))
         else viewModelScope.launch { mutableEvents.emit(UiEvent.LaunchIntent(intent)) }
     }
     override fun onCleared() {
-        operation?.cancel(); accessJob?.cancel(); lifecycleRecovery.cancel(); historyClearJob?.cancel()
+        operation?.cancel(); lifecycleRecovery.cancel(); historyClearJob?.cancel()
         Shizuku.removeBinderReceivedListener(receivedListener)
         Shizuku.removeBinderDeadListener(deadListener)
         Shizuku.removeRequestPermissionResultListener(permissionListener)

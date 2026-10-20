@@ -46,4 +46,13 @@ class HistoryPresentationTest {
         assertTrue(formatHistoryReport(failed, "1.1-test").contains("Не установлено"))
         assertTrue(formatHistoryReport(success, "1.1-test").contains("Успешно"))
     }
+    @Test fun reportDateFollowsTheExplicitLocaleAfterLanguageChanges() {
+        val entry = unknown.copy(timestamp = java.time.Instant.parse("2026-10-20T12:00:00Z").toEpochMilli())
+        val russian = dev.splitbox.core.MessageEnvelope.diagnostic(formatHistoryReport(entry, "test", java.util.Locale.forLanguageTag("ru")))
+        val english = dev.splitbox.core.MessageEnvelope.diagnostic(formatHistoryReport(entry, "test", java.util.Locale.ENGLISH))
+        assertTrue("Русский отчёт должен содержать русский месяц: $russian", russian.contains("окт"))
+        assertTrue("Английский отчёт должен содержать английский месяц: $english", english.contains("Oct"))
+        assertFalse("Месяц старой локали не должен оставаться в английском отчёте", english.contains("окт"))
+        assertNotEquals(russian, english)
+    }
 }

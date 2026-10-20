@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package dev.splitbox.app
 
+import dev.splitbox.core.message
+import dev.splitbox.core.nestedMessage
+
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
@@ -38,6 +41,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        viewModel.refreshLanguage()
         enableEdgeToEdge()
         setContent {
             SplitBoxApp(
@@ -48,6 +52,8 @@ class MainActivity : ComponentActivity() {
                 onExportObb = ::chooseObbDestination,
                 onRetrySave = viewModel::retrySelectionSave,
                 onLaunchIntent = { startActivity(it) },
+                onOpenShizuku = ::openShizuku,
+                onShizukuWebsite = ::openShizukuWebsite,
             )
         }
         if (savedInstanceState == null) importFromIntent(intent)
@@ -64,13 +70,39 @@ class MainActivity : ComponentActivity() {
         viewModel.onHostResumed()
     }
 
+    private fun openShizuku() {
+        try {
+            val launch = packageManager.getLaunchIntentForPackage("moe.shizuku.privileged.api")
+            if (launch != null) startActivity(launch) else reportShizukuLaunchFailure()
+        } catch (_: ActivityNotFoundException) {
+            reportShizukuLaunchFailure()
+        } catch (_: SecurityException) {
+            reportShizukuLaunchFailure()
+        }
+    }
+    private fun reportShizukuLaunchFailure() {
+        viewModel.reportMessage(message("shizuku_launch_unavailable", "Не удалось открыть Shizuku. Установите или откройте его отдельно; официальный сайт доступен в настройках."))
+    }
+    private fun openShizukuWebsite() {
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://shizuku.rikka.app/download/")))
+        } catch (_: ActivityNotFoundException) {
+            reportShizukuWebsiteFailure()
+        } catch (_: SecurityException) {
+            reportShizukuWebsiteFailure()
+        }
+    }
+    private fun reportShizukuWebsiteFailure() {
+        viewModel.reportMessage(message("shizuku_website_unavailable", "Не удалось открыть сайт Shizuku. Откройте https://shizuku.rikka.app/download/ в браузере."))
+    }
+
     private fun chooseFile() {
         try {
             openDocument.launch(arrayOf("*/*"))
         } catch (_: ActivityNotFoundException) {
-            viewModel.reportMessage("На устройстве нет системного выбора файлов. Откройте APK или архив в файловом менеджере через «Открыть с помощью SplitBox».", NoticeAction.CHOOSE_FILE)
+            viewModel.reportMessage(message("main_activity_this_device_has_no_system_file_picker", "На устройстве нет системного выбора файлов. Откройте APK или архив в файловом менеджере через «Открыть с помощью SplitBox»."), NoticeAction.CHOOSE_FILE)
         } catch (_: SecurityException) {
-            viewModel.reportMessage("Android запретил открыть выбор файлов. Попробуйте передать APK или архив из файлового менеджера в SplitBox.", NoticeAction.CHOOSE_FILE)
+            viewModel.reportMessage(message("main_activity_android_blocked_the_file_picker_try_sending", "Android запретил открыть выбор файлов. Попробуйте передать APK или архив из файлового менеджера в SplitBox."), NoticeAction.CHOOSE_FILE)
         }
     }
 
@@ -78,9 +110,9 @@ class MainActivity : ComponentActivity() {
         try {
             openApks.launch(arrayOf("*/*"))
         } catch (_: ActivityNotFoundException) {
-            viewModel.reportMessage("На устройстве нет системного выбора файлов. Передайте APK одного приложения из файлового менеджера в SplitBox.", NoticeAction.CHOOSE_FILE)
+            viewModel.reportMessage(message("main_activity_this_device_has_no_system_file_picker_2", "На устройстве нет системного выбора файлов. Передайте APK одного приложения из файлового менеджера в SplitBox."), NoticeAction.CHOOSE_FILE)
         } catch (_: SecurityException) {
-            viewModel.reportMessage("Android запретил открыть выбор файлов. Передайте APK одного приложения из файлового менеджера в SplitBox.", NoticeAction.CHOOSE_FILE)
+            viewModel.reportMessage(message("main_activity_android_blocked_the_file_picker_send_the", "Android запретил открыть выбор файлов. Передайте APK одного приложения из файлового менеджера в SplitBox."), NoticeAction.CHOOSE_FILE)
         }
     }
 
@@ -88,9 +120,9 @@ class MainActivity : ComponentActivity() {
         try {
             createObbArchive.launch(name)
         } catch (_: ActivityNotFoundException) {
-            viewModel.reportMessage("На устройстве нет системного диалога сохранения файлов. Экспорт OBB сейчас недоступен.")
+            viewModel.reportMessage(message("main_activity_this_device_has_no_system_file_save", "На устройстве нет системного диалога сохранения файлов. Экспорт OBB сейчас недоступен."))
         } catch (_: SecurityException) {
-            viewModel.reportMessage("Android запретил открыть диалог сохранения. Экспорт OBB не начат.")
+            viewModel.reportMessage(message("main_activity_android_blocked_the_save_dialog_obb_export", "Android запретил открыть диалог сохранения. Экспорт OBB не начат."))
         }
     }
 
@@ -113,7 +145,7 @@ class MainActivity : ComponentActivity() {
             if (uri.scheme == "content" || uri.scheme == "file") {
                 viewModel.importUri(uri)
             } else {
-                viewModel.reportMessage("Откройте локальный APK или архив через файловый менеджер", NoticeAction.CHOOSE_FILE)
+                viewModel.reportMessage(message("main_activity_open_a_local_apk_or_archive_using", "Откройте локальный APK или архив через файловый менеджер"), NoticeAction.CHOOSE_FILE)
             }
         }
     }

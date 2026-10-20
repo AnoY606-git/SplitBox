@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package dev.splitbox.app.installer
 
+import dev.splitbox.core.message
+import dev.splitbox.core.nestedMessage
+
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -42,16 +45,16 @@ class InstallResultReceiver : BroadcastReceiver() {
                         return
                     }
                 }
-                journal.recordResult(id, false, "Android не передал пригодное подтверждение установки")
+                journal.recordResult(id, false, message("install_result_receiver_android_did_not_provide_a_usable_installation", "Android не передал пригодное подтверждение установки"))
                 runCatching { context.packageManager.packageInstaller.abandonSession(id) }
                 return
             }
             val success = status == PackageInstaller.STATUS_SUCCESS
             val message = when {
-                success -> "Приложение установлено"
-                status == Int.MIN_VALUE -> "Android вернул результат без обязательного статуса"
-                status == PackageInstaller.STATUS_FAILURE_ABORTED -> "Установка отменена пользователем${if (detail.isBlank()) "" else ": $detail"}"
-                else -> "Установка не выполнена (статус $status)${if (detail.isBlank()) "" else ": $detail"}"
+                success -> message("split_box_view_model_app_installed", "Приложение установлено")
+                status == Int.MIN_VALUE -> message("install_result_receiver_android_returned_a_result_without_the_required", "Android вернул результат без обязательного статуса")
+                status == PackageInstaller.STATUS_FAILURE_ABORTED -> message("install_result_receiver_installation_canceled_by_the_user", "Установка отменена пользователем%1\$s", if (detail.isBlank()) "" else ": $detail")
+                else -> message("install_result_receiver_installation_failed_status", "Установка не выполнена (статус %1\$s)%2\$s", status, if (detail.isBlank()) "" else ": $detail")
             }
             journal.recordResult(id, success, message)
     }

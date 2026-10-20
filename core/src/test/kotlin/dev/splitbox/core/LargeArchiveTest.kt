@@ -215,7 +215,7 @@ class LargeArchiveTest {
         val cancellation = CancellationException("Отменено владельцем операции")
         val actual = assertThrows(CancellationException::class.java) {
             ArchivePreparer().prepare(source, "package.apks", root, device,
-                onProgress = { message, _ -> if (message.startsWith("Чтение APK")) throw cancellation })
+                onProgress = { message, _ -> if (MessageEnvelope.diagnostic(message).startsWith("Чтение APK")) throw cancellation })
         }
         assertSame(cancellation, actual)
         assertTrue(source.exists())

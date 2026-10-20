@@ -25,7 +25,7 @@ class StagedApkPreparerTest {
         val ru = apk(dir, "0001.bin", CoreFixtures.manifest(split = "config.ru"))
         val en = apk(dir, "0002.bin", CoreFixtures.manifest(split = "config.en"))
         val result = prepare(dir, listOf(base, ru, en))
-        assertEquals("Набор из 3 APK", result.sourceName)
+        assertEquals("Набор из 3 APK", MessageEnvelope.diagnostic(result.sourceName))
         assertEquals(listOf(base.file, ru.file, en.file), result.apks.map { it.file })
         assertEquals(listOf(true, true, false), result.apks.map { it.selected })
         assertTrue(result.obbFiles.isEmpty())

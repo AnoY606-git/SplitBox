@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package dev.splitbox.app.installer
 
+import dev.splitbox.core.message
+import dev.splitbox.core.nestedMessage
+
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
@@ -15,7 +18,7 @@ import kotlinx.coroutines.withContext
 
 class SystemInstallBackend(private val context: Context, private val journal: InstallJournal) : InstallBackend {
     override suspend fun install(request: InstallRequest, progress: (String, Float?) -> Unit): BackendOutcome = withContext(Dispatchers.IO) {
-        check(context.packageManager.canRequestPackageInstalls()) { "Разрешите установку из этого источника" }
+        check(context.packageManager.canRequestPackageInstalls()) { message("system_install_backend_allow_installation_from_this_source", "Разрешите установку из этого источника") }
         val installer = context.packageManager.packageInstaller
         val size = request.apks.fold(0L) { sum, entry -> Math.addExact(sum, entry.file.length()) }
         val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL).apply {
@@ -30,14 +33,14 @@ class SystemInstallBackend(private val context: Context, private val journal: In
                 request.prepared.metadata.versionName, request.appLabel, request.prepared.sourceName,
                 request.prepared.workDir.absolutePath, System.currentTimeMillis(),
                 request.settings.cleanAfterInstall, request.settings.saveHistory,
-                obbWarning = if (request.prepared.obbFiles.isNotEmpty()) "OBB не копируются системным способом. Экспортируйте ZIP и перенесите файлы в Android/obb/${request.prepared.metadata.packageName}." else null))
+                obbWarning = if (request.prepared.obbFiles.isNotEmpty()) message("system_install_backend_obb_files_are_not_copied_with_the", "OBB не копируются системным способом. Экспортируйте ZIP и перенесите файлы в Android/obb/%1\$s.", request.prepared.metadata.packageName) else null))
             journal.flush()
             installer.openSession(id).use { session ->
                 var written = 0L
-                val reporting = TransferProgress(size) { bytes, fraction -> progress("Запись APK · ${bytes / 1048576} МиБ", fraction) }
+                val reporting = TransferProgress(size) { bytes, fraction -> progress(message("system_install_backend_writing_apk_mib", "Запись APK · %1\$s МиБ", bytes / 1048576), fraction) }
                 request.apks.forEachIndexed { index, entry ->
                     currentCoroutineContext().ensureActive()
-                    progress("Запись APK ${index + 1} из ${request.apks.size}", (written.toDouble() / size).toFloat())
+                    progress(message("system_install_backend_writing_apk_of", "Запись APK %1\$s из %2\$s", index + 1, request.apks.size), (written.toDouble() / size).toFloat())
                     session.openWrite("split_$index.apk", 0, entry.file.length()).use { output ->
                         entry.file.inputStream().use { input ->
                             val buffer = ByteArray(65536)
@@ -62,7 +65,7 @@ class SystemInstallBackend(private val context: Context, private val journal: In
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE)
                 request.onCommitStarted()
                 // Сохраняем до commit: обратный вызов может поступить раньше возврата из commit.
-                journal.write(requireNotNull(journal.read()) { "Состояние системной сессии установки недоступно" }.copy(state = "COMMITTED"))
+                journal.write(requireNotNull(journal.read()) { message("system_install_backend_system_installation_session_state_unavailable", "Состояние системной сессии установки недоступно") }.copy(state = "COMMITTED"))
                 journal.flush()
                 session.commit(pendingIntent.intentSender)
                 committed = true
@@ -71,7 +74,7 @@ class SystemInstallBackend(private val context: Context, private val journal: In
         } catch (e: Exception) {
             val stored = journal.read()
             if (stored?.sessionId == id && stored.state != "FINISHED") {
-                journal.write(stored.copy(state = "FINISHED", success = false, message = e.message ?: "Ошибка установки", confirmation = null))
+                journal.write(stored.copy(state = "FINISHED", success = false, message = e.message ?: message("split_box_view_model_installation_error", "Ошибка установки"), confirmation = null))
             }
             throw e
         } finally {

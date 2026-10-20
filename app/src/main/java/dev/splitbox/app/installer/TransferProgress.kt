@@ -2,13 +2,16 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package dev.splitbox.app.installer
 
+import dev.splitbox.core.message
+import dev.splitbox.core.nestedMessage
+
 import java.io.InputStream
 import java.util.concurrent.CancellationException
 
 /** Передача 9 ГиБ может занимать часы. Срок конечный и рассчитан на 256 КиБ/с плюс две минуты. */
 internal object TransferPolicy {
     fun timeoutSeconds(bytes: Long): Long {
-        require(bytes > 0) { "Размер передачи должен быть положительным" }
+        require(bytes > 0) { message("transfer_progress_the_transfer_size_must_be_positive", "Размер передачи должен быть положительным") }
         return 120L + bytes / 262144L + if (bytes % 262144L == 0L) 0L else 1L
     }
     fun binderTimeoutMs(bytes: Long): Long = Math.multiplyExact(timeoutSeconds(bytes) + 30L, 1000L)
@@ -31,7 +34,7 @@ internal class TransferProgress(private val total: Long?, private val clock: () 
 
 internal class ProgressInputStream(private val input: InputStream, private val progress: (Long) -> Unit) : InputStream() {
     private var bytes = 0L
-    private fun active() { if (Thread.currentThread().isInterrupted) throw CancellationException("Передача отменена") }
+    private fun active() { if (Thread.currentThread().isInterrupted) throw CancellationException(message("transfer_progress_transfer_canceled", "Передача отменена")) }
     override fun read(): Int {
         active()
         return input.read().also { active(); if (it >= 0) { bytes = Math.addExact(bytes, 1L); progress(bytes) } }

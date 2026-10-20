@@ -2,23 +2,26 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package dev.splitbox.app.ui
 
+import dev.splitbox.core.message
+import dev.splitbox.core.nestedMessage
+
 import dev.splitbox.app.model.OperationPhase
 import dev.splitbox.app.model.UiState
 import dev.splitbox.core.ApkEntry
 
 internal enum class SplitGroupKind(val title: String) {
-    BASE("Базовый APK"), FEATURE("Модули приложения"), ABI("Архитектуры процессора"),
-    DENSITY("Плотность экрана"), LANGUAGE("Языки"), OTHER("Другие части"),
+    BASE(message("install_presentation_base_apk", "Базовый APK")), FEATURE(message("install_presentation_app_modules", "Модули приложения")), ABI(message("install_presentation_cpu_architectures", "Архитектуры процессора")),
+    DENSITY(message("install_presentation_screen_density", "Плотность экрана")), LANGUAGE(message("install_presentation_languages", "Языки")), OTHER(message("install_presentation_other_splits", "Другие части")),
 }
 internal data class SplitGroup(val kind: SplitGroupKind, val entries: List<ApkEntry>)
 /** Только представление: классификация не меняет выбор и не заменяет проверку ядра. */
-internal fun groupSplits(entries: List<ApkEntry>, selectedPaths: Set<String>, selectedOnly: Boolean, query: String = ""): List<SplitGroup> {
+internal fun groupSplits(entries: List<ApkEntry>, selectedPaths: Set<String>, selectedOnly: Boolean, query: String = "", title: (SplitGroupKind) -> String = { dev.splitbox.core.MessageEnvelope.diagnostic(it.title) }): List<SplitGroup> {
     val term = query.trim()
     val visible = entries.filter { entry ->
         (!selectedOnly || entry.locked || entry.archivePath in selectedPaths) &&
             (term.isEmpty() || entry.archivePath.contains(term, ignoreCase = true) ||
                 entry.metadata.splitName.orEmpty().contains(term, ignoreCase = true) ||
-                splitGroupKind(entry).title.contains(term, ignoreCase = true))
+                title(splitGroupKind(entry)).contains(term, ignoreCase = true))
     }
     val groups = visible.groupBy(::splitGroupKind)
     return SplitGroupKind.entries.mapNotNull { kind -> groups[kind]?.let { SplitGroup(kind, it) } }

@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package dev.splitbox.app.data
 
+import dev.splitbox.core.message
+import dev.splitbox.core.nestedMessage
+
 import android.net.Uri
 import dev.splitbox.core.*
 import java.io.File
@@ -31,7 +34,7 @@ internal class PackageImporter(private val stager: PackageStager) {
         val staged = MultiApkStager.stage(uris, directory, sourceBudget, stager::name,
             stager::openSource, cancelled, progress)
         onCopy(total, staged.fold(0L) { sum, entry -> Math.addExact(sum, entry.file.length()) })
-        onAnalysis("Набор из ${uris.size} APK", null)
+        onAnalysis(message("package_importer_set_of_apks", "Набор из %1\$s APK", uris.size), null)
         val prepared = StagedApkPreparer().prepare(staged, directory, device, options, onAnalysis, cancelled)
         // У набора нет единственного исходного файла и единственного SHA-256.
         return PreparedImport(prepared, null, null)

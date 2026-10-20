@@ -2,43 +2,49 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package dev.splitbox.app.installer
 
+import dev.splitbox.core.message
+import dev.splitbox.core.nestedMessage
 /** Нулевой код завершения без явного подтверждения Package Manager не считается успехом. */
 data class PmResult(val exitCode: Int, val output: String) {
     val success: Boolean get() = exitCode == 0 &&
         !Regex("(?im)\\b(?:Failure|Error|Exception)\\b").containsMatchIn(output) &&
         Regex("(?m)^Success(?:$|:|\\s)").containsMatchIn(output.trim())
     fun requireSuccess(): PmResult = apply {
-        check(success) { "Команда Package Manager не завершилась успешно (код $exitCode): " + output.trim().ifEmpty { "ответ отсутствует" } }
+        check(success) {
+            val detail: Any = output.trim().takeIf { it.isNotEmpty() }
+                ?: nestedMessage(message("pm_protocol_no_response", "ответ отсутствует"))
+            message("pm_protocol_package_manager_command_failed_code", "Команда Package Manager не завершилась успешно (код %1\$s): %2\$s", exitCode, detail)
+        }
     }
 }
 object PmProtocol {
     fun create(userId: Int, size: Long, downgrade: Boolean): String {
-        require(userId >= 0 && size > 0) { "Некорректный пользователь Android или размер пакета" }
+        require(userId >= 0 && size > 0) { message("pm_protocol_invalid_android_user_or_package_size", "Некорректный пользователь Android или размер пакета") }
         return "pm install-create --user $userId -r${if (downgrade) " -d" else ""} -S $size"
     }
     fun write(sessionId: Int, index: Int, size: Long): String {
-        require(sessionId > 0 && index >= 0 && size > 0) { "Некорректный идентификатор сессии, номер части или размер APK" }
+        require(sessionId > 0 && index >= 0 && size > 0) { message("pm_protocol_invalid_session_id_part_number_or_apk", "Некорректный идентификатор сессии, номер части или размер APK") }
         return "pm install-write -S $size $sessionId 'split_$index.apk' -"
     }
-    fun commit(sessionId: Int): String { require(sessionId > 0) { "Некорректный идентификатор сессии установки" }; return "pm install-commit $sessionId" }
-    fun abandon(sessionId: Int): String { require(sessionId > 0) { "Некорректный идентификатор сессии установки" }; return "pm install-abandon $sessionId" }
+    fun commit(sessionId: Int): String { require(sessionId > 0) { message("pm_protocol_invalid_installation_session_id", "Некорректный идентификатор сессии установки") }; return "pm install-commit $sessionId" }
+    fun abandon(sessionId: Int): String { require(sessionId > 0) { message("pm_protocol_invalid_installation_session_id", "Некорректный идентификатор сессии установки") }; return "pm install-abandon $sessionId" }
     fun sessionId(result: PmResult): Int {
         result.requireSuccess()
         val match = Regex("^Success: created install session \\[(\\d+)]$").matchEntire(result.output.trim())
-            ?: error("Package Manager не вернул корректный идентификатор сессии: ${result.output.take(500)}")
+            ?: error(message("pm_protocol_package_manager_did_not_return_a_valid", "Package Manager не вернул корректный идентификатор сессии: %1\$s", result.output.take(500)))
         return match.groupValues[1].toIntOrNull()?.takeIf { it > 0 }
-            ?: error("Некорректный идентификатор сессии")
+            ?: error(message("pm_protocol_invalid_session_id", "Некорректный идентификатор сессии"))
     }
 }
 internal data class ObbCopyPlan(val command: String, val temporaryPath: String, val cleanupCommand: String)
 
 object ObbPolicy {
     fun destination(userId: Int, packageName: String, version: Long, basename: String): String {
-        require(userId >= 0 && version >= 0) { "Некорректный пользователь Android или версия расширения OBB" }
-        require(Regex("[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)+").matches(packageName)) { "Некорректное имя пакета для OBB" }
+        require(userId >= 0 && version >= 0) { message("pm_protocol_invalid_android_user_or_obb_expansion_version", "Некорректный пользователь Android или версия расширения OBB") }
+        require(Regex("[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)+").matches(packageName)) { message("pm_protocol_invalid_package_name_for_obb", "Некорректное имя пакета для OBB") }
         val match = Regex("(?:main|patch)\\.([0-9]+)\\.${Regex.escape(packageName)}\\.obb").matchEntire(basename)
         require(match != null && match.groupValues[1].toLongOrNull() != null) {
-            "Имя OBB должно содержать числовую версию расширения и точное имя пакета APK"
+            message("pm_protocol_the_obb_name_must_contain_a_numeric", "Имя OBB должно содержать числовую версию расширения и точное имя пакета APK")
         }
         return "/storage/emulated/$userId/Android/obb/$packageName/$basename"
     }
@@ -47,7 +53,7 @@ object ObbPolicy {
         copyPlan(userId, packageName, version, basename, size).command
 
     internal fun copyPlan(userId: Int, packageName: String, version: Long, basename: String, size: Long): ObbCopyPlan {
-        require(size > 0) { "Размер файла OBB должен быть положительным" }
+        require(size > 0) { message("pm_protocol_the_obb_file_size_must_be_positive", "Размер файла OBB должен быть положительным") }
         val path = destination(userId, packageName, version, basename)
         val dir = path.substringBeforeLast('/')
         val root = dir.substringBeforeLast('/')
@@ -71,5 +77,5 @@ object ObbPolicy {
 }
 
 internal fun obbFailureWarning(error: Exception): String = if (error is java.util.concurrent.CancellationException)
-    "APK установлен. Перенос OBB отменён. Используйте экспорт ZIP."
-else "APK установлен, но перенос или очистка OBB не завершены: ${error.message ?: "ошибка передачи"}. Используйте экспорт ZIP."
+    message("pm_protocol_apk_installed_obb_transfer_was_canceled_use", "APK установлен. Перенос OBB отменён. Используйте экспорт ZIP.")
+else message("pm_protocol_apk_installed_but_obb_transfer_or_cleanup", "APK установлен, но перенос или очистка OBB не завершены: %1\$s. Используйте экспорт ZIP.", nestedMessage(error.message ?: message("pm_protocol_transfer_error", "ошибка передачи")))

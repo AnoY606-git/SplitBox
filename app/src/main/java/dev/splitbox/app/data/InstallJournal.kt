@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package dev.splitbox.app.data
 
+import dev.splitbox.core.message
+import dev.splitbox.core.nestedMessage
+
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
@@ -30,10 +33,10 @@ class InstallJournal private constructor(context: Context) {
         prefs = context.applicationContext.getSharedPreferences("install_journal", Context.MODE_PRIVATE)
         val current = prefs.getString("session", null)?.let { decode(JSONObject(it)) }
         val array = JSONArray(prefs.getString("retained", "[]"))
-        require(array.length() <= 100) { "Системный журнал содержит слишком много записей" }
+        require(array.length() <= 100) { message("install_journal_the_system_log_contains_too_many_records", "Системный журнал содержит слишком много записей") }
         val retained = (0 until array.length()).map { decode(array.getJSONObject(it)) }
         val source = prefs.getString("resumeSource", null)
-        val permission = source?.let { Triple(it, prefs.getString("resumeName", "Архив")!!,
+        val permission = source?.let { Triple(it, prefs.getString("resumeName", message("install_journal_archive", "Архив"))!!,
             prefs.getString("resumeDirectory", "")!!) }
         synchronized(lock) {
             snapshot = InstallJournalSnapshot(SystemSessionLedger(current, retained), prefs.getString("preparedDirectory", null), permission)
@@ -52,7 +55,7 @@ class InstallJournal private constructor(context: Context) {
     fun find(sessionId: Int): PendingInstall? = snapshot.ledger.find(sessionId)
     private fun publish(ledger: SystemSessionLedger) { mutable.value = ledger.current; mutableRetained.value = ledger.retained }
     private fun update(transform: (InstallJournalSnapshot) -> InstallJournalSnapshot) = synchronized(lock) {
-        check(loaded) { "Журнал установки ещё загружается" }
+        check(loaded) { message("install_journal_the_installation_log_is_still_loading", "Журнал установки ещё загружается") }
         val next = transform(snapshot)
         if (next != snapshot) {
             snapshot = next
@@ -69,7 +72,7 @@ class InstallJournal private constructor(context: Context) {
         editor.putString("preparedDirectory", value.prepared)
         editor.putString("resumeSource", value.permission?.first).putString("resumeName", value.permission?.second)
             .putString("resumeDirectory", value.permission?.third)
-        check(editor.commit()) { "Не удалось сохранить журнал установки. Освободите место и повторите сохранение." }
+        check(editor.commit()) { message("install_journal_could_not_save_the_installation_log_free", "Не удалось сохранить журнал установки. Освободите место и повторите сохранение.") }
     }
     fun write(value: PendingInstall) = mutate { ledger ->
         val previous = ledger.find(value.sessionId)
@@ -77,7 +80,7 @@ class InstallJournal private constructor(context: Context) {
     }
     fun markMissing(sessionId: Int) = mutate { it.missingSession(sessionId) }
     fun markLaunchFailed(sessionId: Int) = mutate { it.markUnknown(sessionId,
-        "Системное окно не открылось. Нажмите «Проверить статус», чтобы повторить запуск, или выберите другой файл. Результат установки пока не подтверждён.", true) }
+        message("install_journal_the_system_dialog_did_not_open_tap", "Системное окно не открылось. Нажмите «Проверить статус», чтобы повторить запуск, или выберите другой файл. Результат установки пока не подтверждён."), true) }
     fun recordConfirmation(sessionId: Int, encodedIntent: String) = mutate { it.recordConfirmation(sessionId, encodedIntent) }
     fun recordResult(sessionId: Int, success: Boolean, message: String) = mutate { it.recordResult(sessionId, success, message) }
     fun consume(sessionId: Int) = mutate { it.consume(sessionId) }
@@ -85,7 +88,7 @@ class InstallJournal private constructor(context: Context) {
     fun clear() { read()?.let { consume(it.sessionId) } }
     fun preparedDirectory(): String? = snapshot.prepared
     fun savePreparedDirectory(directory: String) {
-        require(directory.length <= 4096) { "Путь к готовому пакету слишком длинный" }
+        require(directory.length <= 4096) { message("install_journal_the_prepared_package_path_is_too_long", "Путь к готовому пакету слишком длинный") }
         update { it.copy(prepared = directory) }
     }
     fun clearPreparedDirectory(expected: String? = null) = update {

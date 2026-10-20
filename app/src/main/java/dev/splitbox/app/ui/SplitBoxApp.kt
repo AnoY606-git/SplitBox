@@ -2,6 +2,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package dev.splitbox.app.ui
 
+import dev.splitbox.app.R
+import androidx.compose.ui.res.stringResource
+import dev.splitbox.core.message
+import dev.splitbox.core.nestedMessage
+
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.view.Window
@@ -28,13 +33,13 @@ import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Widgets
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Icon
+import dev.splitbox.app.ui.LocalizedIcon as Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
+import dev.splitbox.app.ui.LocalizedText as Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -67,9 +72,9 @@ import dev.splitbox.app.ui.theme.SplitBoxTheme
 import kotlinx.coroutines.flow.collect
 
 private enum class Destination(val label: String, val icon: ImageVector) {
-    INSTALL("Установка", Icons.Rounded.Widgets),
-    HISTORY("История", Icons.Rounded.History),
-    SETTINGS("Настройки", Icons.Rounded.Settings),
+    INSTALL(message("split_box_app_install", "Установка"), Icons.Rounded.Widgets),
+    HISTORY(message("split_box_app_history", "История"), Icons.Rounded.History),
+    SETTINGS(message("split_box_app_settings", "Настройки"), Icons.Rounded.Settings),
 }
 
 internal fun OperationPhase.isBusy(): Boolean = this == OperationPhase.COPYING || this == OperationPhase.ANALYZING ||
@@ -83,8 +88,11 @@ fun SplitBoxApp(
     onChooseApks: () -> Unit,
     onExportObb: (String) -> Unit,
     onLaunchIntent: (Intent) -> Unit,
+    onOpenShizuku: () -> Unit,
+    onShizukuWebsite: () -> Unit,
     onRetrySave: () -> Unit = {},
 ) {
+
     val ui by viewModel.uiState.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val history by viewModel.history.collectAsStateWithLifecycle()
@@ -116,10 +124,10 @@ fun SplitBoxApp(
                         event.acknowledgementToken?.let { viewModel.acknowledgeIntentLaunch(it, true) }
                     } catch (_: ActivityNotFoundException) {
                         event.acknowledgementToken?.let { viewModel.acknowledgeIntentLaunch(it, false) }
-                        viewModel.reportMessage("Android не нашёл приложение для этого действия")
+                        viewModel.reportMessage(message("split_box_app_android_could_not_find_an_app_for", "Android не нашёл приложение для этого действия"))
                     } catch (_: SecurityException) {
                         event.acknowledgementToken?.let { viewModel.acknowledgeIntentLaunch(it, false) }
-                        viewModel.reportMessage("Android запретил открыть это действие")
+                        viewModel.reportMessage(message("split_box_app_android_blocked_this_action", "Android запретил открыть это действие"))
                     }
                     is UiEvent.Message -> viewModel.reportMessage(event.text)
                 }
@@ -166,7 +174,7 @@ fun SplitBoxApp(
                 ) {
                     SplitBoxMark(Modifier.size(30.dp))
                     Text("SplitBox", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    IconButton(onClick = { showAbout = true }) { Icon(Icons.Rounded.Info, "О SplitBox") }
+                    IconButton(onClick = { showAbout = true }) { Icon(Icons.Rounded.Info, stringResource(R.string.split_box_app_about_splitbox)) }
                 }
             },
             bottomBar = {
@@ -205,8 +213,11 @@ fun SplitBoxApp(
                         Destination.SETTINGS -> SettingsScreen(
                             settings, access, cacheBytes, ui.phase.isBusy(),
                             onUpdate = viewModel::updateSettings,
+                            onLanguageChange = viewModel::updateLanguage,
                             onRootAccess = viewModel::requestRootAccess,
                             onShizukuAccess = viewModel::requestShizukuAccess,
+                            onOpenShizuku = onOpenShizuku,
+                            onShizukuWebsite = onShizukuWebsite,
                             onRefreshAccess = viewModel::refreshAccess,
                             onClearCache = viewModel::clearCache,
                             onLicense = { legalDocumentName = LegalDocument.LICENSE.name },
@@ -220,7 +231,7 @@ fun SplitBoxApp(
         notice?.let { message ->
             AlertDialog(
                 onDismissRequest = viewModel::dismissNotice,
-                title = { Text("Сообщение SplitBox") },
+                title = { Text(stringResource(R.string.split_box_app_splitbox_message)) },
                 text = {
                     SelectionContainer {
                         Column(Modifier.heightIn(max = 240.dp).verticalScroll(rememberScrollState())) {
@@ -237,22 +248,22 @@ fun SplitBoxApp(
                             null -> Unit
                         }
                     }) { Text(when (message.action) {
-                        NoticeAction.CHOOSE_FILE -> "Выбрать файл"
-                        NoticeAction.RETRY_SAVE -> "Повторить сохранение"
-                        null -> "Понятно"
+                        NoticeAction.CHOOSE_FILE -> stringResource(R.string.install_screen_choose_file)
+                        NoticeAction.RETRY_SAVE -> stringResource(R.string.install_screen_retry_saving)
+                        null -> stringResource(R.string.split_box_app_ok)
                     }) }
                 },
-                dismissButton = { TextButton(onClick = viewModel::dismissNotice) { Text("Закрыть") } },
+                dismissButton = { TextButton(onClick = viewModel::dismissNotice) { Text(stringResource(R.string.history_screen_close)) } },
             )
         }
         if (showAbout) {
             AlertDialog(
                 onDismissRequest = { showAbout = false },
                 icon = { SplitBoxMark(Modifier.size(48.dp)) },
-                title = { Text("Открытая коробка возможностей") },
-                text = { Text("SplitBox ${BuildConfig.VERSION_NAME} — открытый установщик APK и архивов с частями приложения для Android 14+.\n\nАвтор: AnoY606-git.\nhttps://github.com/AnoY606-git\n\n© 2026 AnoY606-git и участники SplitBox.\n\nБез рекламы, аккаунтов и аналитики. Все данные остаются на устройстве.\n\nGNU GPL v3 (GPL-3.0-only). При распространении кода сохраняйте уведомления об авторстве и лицензии. Исходники входят в комплект проекта. Программа предоставляется без гарантий.") },
-                confirmButton = { TextButton(onClick = { showAbout = false }) { Text("Понятно") } },
-                dismissButton = { TextButton(onClick = { showAbout = false; legalDocumentName = LegalDocument.ATTRIBUTION.name }) { Text("Авторство и лицензия") } },
+                title = { Text(stringResource(R.string.split_box_app_an_open_box_of_possibilities)) },
+                text = { Text(message("split_box_app_splitbox_1_is_an_open_source_installer", "SplitBox %1\$s — открытый установщик APK и архивов с частями приложения для Android 14+.\n\nАвтор: AnoY606-git.\nhttps://github.com/AnoY606-git\n\n© 2026 AnoY606-git и участники SplitBox.\n\nБез рекламы, аккаунтов и аналитики. Все данные остаются на устройстве.\n\nGNU GPL v3 (GPL-3.0-only). При распространении кода сохраняйте уведомления об авторстве и лицензии. Исходники входят в комплект проекта. Программа предоставляется без гарантий.", BuildConfig.VERSION_NAME)) },
+                confirmButton = { TextButton(onClick = { showAbout = false }) { Text(stringResource(R.string.split_box_app_ok)) } },
+                dismissButton = { TextButton(onClick = { showAbout = false; legalDocumentName = LegalDocument.ATTRIBUTION.name }) { Text(stringResource(R.string.split_box_app_attribution_and_license)) } },
             )
         }
         legalDocumentName?.let { name -> LegalDialog(LegalDocument.valueOf(name)) { legalDocumentName = null } }

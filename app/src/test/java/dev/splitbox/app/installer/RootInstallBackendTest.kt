@@ -60,7 +60,7 @@ class RootInstallBackendTest {
         assertEquals(listOf("commit", "confirmed", "obb"), phases)
         val result = (finished as BackendOutcome.Finished).result
         assertTrue(result.success)
-        assertEquals("APK установлен. Перенос OBB отменён. Используйте экспорт ZIP.", result.obbWarning)
+        assertEquals("APK установлен. Перенос OBB отменён. Используйте экспорт ZIP.", dev.splitbox.core.MessageEnvelope.diagnostic(result.obbWarning.orEmpty()))
     } }
     @Test fun failedOwnedTemporaryCleanupBecomesObbWarningAfterConfirmedApkSuccess() = fixture { request -> runBlocking {
         val obbFile = request.prepared.workDir.resolve("main.1.dev.test.game.obb").apply { writeText("obb") }
@@ -150,7 +150,7 @@ class RootInstallBackendTest {
         var started = false
         val operation = launch {
             RootInstallBackend(runner).install(request.copy(onCommitStarted = { started = true })) { stage, _ ->
-                if (stage == "Root: установка") this@launch.cancel()
+                if (dev.splitbox.core.MessageEnvelope.diagnostic(stage) == "Root: установка") this@launch.cancel()
             }
         }
         operation.join()

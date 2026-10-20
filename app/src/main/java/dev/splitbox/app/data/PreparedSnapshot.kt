@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package dev.splitbox.app.data
 
+import dev.splitbox.core.message
+import dev.splitbox.core.nestedMessage
+
 import dev.splitbox.core.*
 import org.json.JSONArray
 import org.json.JSONObject
@@ -22,33 +25,33 @@ object PreparedSnapshot {
         val target = File(prepared.workDir, "checkpoint.json")
         val temporary = File(prepared.workDir, "checkpoint.tmp")
         temporary.outputStream().use { output -> output.write(j.toString().toByteArray(Charsets.UTF_8)); output.fd.sync() }
-        check(temporary.renameTo(target)) { "Не удалось сохранить подготовленный пакет" }
+        check(temporary.renameTo(target)) { message("prepared_snapshot_could_not_save_the_prepared_package", "Не удалось сохранить подготовленный пакет") }
     }
     data class Restored(val prepared: PreparedPackage, val selected: Set<String>, val sha256: String?, val label: String?)
     fun read(directory: File, root: File): Restored {
-        check(directory.canonicalFile.parentFile == root.canonicalFile) { "Каталог восстановления находится вне кэша" }
+        check(directory.canonicalFile.parentFile == root.canonicalFile) { message("prepared_snapshot_the_recovery_directory_is_outside_the_cache", "Каталог восстановления находится вне кэша") }
         val checkpoint = File(directory, "checkpoint.json")
-        check(checkpoint.length() in 1..8388608) { "Снимок состояния отсутствует или повреждён" }
+        check(checkpoint.length() in 1..8388608) { message("prepared_snapshot_the_state_snapshot_is_missing_or_corrupt", "Снимок состояния отсутствует или повреждён") }
         val j = JSONObject(checkpoint.readText())
         fun safeFile(value: String): File {
             val file = File(value).canonicalFile
-            check(file.toPath().startsWith(directory.canonicalFile.toPath()) && file.isFile) { "Временный файл недоступен" }
+            check(file.toPath().startsWith(directory.canonicalFile.toPath()) && file.isFile) { message("prepared_snapshot_temporary_file_unavailable", "Временный файл недоступен") }
             return file
         }
         val apkArray = j.getJSONArray("apks")
-        check(apkArray.length() in 1..4096) { "Снимок состояния содержит недопустимое количество APK" }
+        check(apkArray.length() in 1..4096) { message("prepared_snapshot_the_state_snapshot_contains_an_invalid_number", "Снимок состояния содержит недопустимое количество APK") }
         val apks = (0 until apkArray.length()).map { i -> apkArray.getJSONObject(i).let { e ->
             val file = safeFile(e.getString("file"))
             val size = e.getLong("size")
-            check(file.length() == size && size > 0) { "Размер APK изменился" }
+            check(file.length() == size && size > 0) { message("prepared_snapshot_the_apk_size_has_changed", "Размер APK изменился") }
             ApkEntry(file, e.getString("archivePath"), readMetadata(e.getJSONObject("metadata")), size,
                 strings(e.getJSONArray("nativeAbis")).toSet(), e.getBoolean("selected"), e.getBoolean("locked"), e.getString("selectionReason"))
         } }
         val obbArray = j.getJSONArray("obb")
-        check(obbArray.length() <= 1024) { "Снимок состояния содержит слишком много файлов OBB" }
+        check(obbArray.length() <= 1024) { message("prepared_snapshot_the_state_snapshot_contains_too_many_obb", "Снимок состояния содержит слишком много файлов OBB") }
         val obb = (0 until obbArray.length()).map { i -> obbArray.getJSONObject(i).let { e ->
             val file = safeFile(e.getString("file")); val size = e.getLong("size")
-            check(file.length() == size && size > 0) { "Размер OBB изменился" }
+            check(file.length() == size && size > 0) { message("prepared_snapshot_the_obb_size_has_changed", "Размер OBB изменился") }
             ObbEntry(file, e.getString("archivePath"), size)
         } }
         return Restored(PreparedPackage(j.getString("sourceName"), readMetadata(j.getJSONObject("metadata")),

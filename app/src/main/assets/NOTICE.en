@@ -1,0 +1,17 @@
+SplitBox — an APK and split package installer for Android
+Copyright (C) 2026 AnoY606-git and SplitBox contributors
+Author: AnoY606-git
+Author profile: https://github.com/AnoY606-git
+
+SplitBox original source code is licensed under GNU GPL version 3 only (GPL-3.0-only).
+When distributing code or derived versions, preserve applicable copyright and license
+notices, identify your changes and comply with GPL source code requirements.
+Original project: SplitBox — AnoY606-git and SplitBox contributors.
+
+You may add notices for your own changes while preserving attribution of the
+original project. See ATTRIBUTION.md and AUTHORS.md for details.
+
+This program is provided WITHOUT ANY WARRANTY, including the implied warranties
+of MERCHANTABILITY and FITNESS FOR A PARTICULAR PURPOSE. See GNU GPL for details.
+Full license text: LICENSE in the source project; in the app, Settings → GNU GPL v3.
+Third-party copyrights and licenses are preserved in THIRD_PARTY_NOTICES.md.

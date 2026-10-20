@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package dev.splitbox.app.data
 
+import dev.splitbox.core.message
+import dev.splitbox.core.nestedMessage
+
 import kotlinx.coroutines.CancellationException
 
 /** Действие и его UI-завершение повторяются только явно; новый пользовательский запрос отменяет старое намерение. */
@@ -14,7 +17,7 @@ class RetryablePersistenceAction(private val onFailure: (String) -> Unit) {
             action()
             if (pending === action) pending = null
         } catch (e: CancellationException) { throw e }
-        catch (e: Exception) { onFailure(e.message ?: "Не удалось сохранить состояние") }
+        catch (e: Exception) { onFailure(e.message ?: message("split_box_view_model_could_not_save_state", "Не удалось сохранить состояние")) }
     }
     suspend fun retry() { pending?.let { run(it) } }
 }

@@ -94,7 +94,7 @@ class ObbCancellationTest {
             withTimeout(10_000) { operation.join() }
             val result = (outcome as BackendOutcome.Finished).result
             assertTrue(result.success)
-            assertEquals("APK установлен. Перенос OBB отменён. Используйте экспорт ZIP.", result.obbWarning)
+            assertEquals("APK установлен. Перенос OBB отменён. Используйте экспорт ZIP.", dev.splitbox.core.MessageEnvelope.diagnostic(result.obbWarning.orEmpty()))
             assertEquals("EXISTING-OBB", target.readText())
             assertEquals("OTHER", other.readText())
             assertEquals(setOf(target.name, other.name), target.parentFile!!.listFiles()!!.map { it.name }.toSet())

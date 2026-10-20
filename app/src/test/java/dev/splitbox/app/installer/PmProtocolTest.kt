@@ -34,4 +34,19 @@ class PmProtocolTest {
         }
         assertThrows(IllegalArgumentException::class.java) { ObbPolicy.destination(0, "com.example;id", 7, "main.7.com.example;id.obb") }
     }
+    @Test fun nativeFailureOutputContainingAnEnvelopeRemainsLiteral() {
+        val native = "Failure [INSTALL_FAILED_INVALID_APK]: " + dev.splitbox.core.message("pm_protocol_no_response", "ответ отсутствует")
+        val error = assertThrows(IllegalStateException::class.java) { PmResult(1, native).requireSuccess() }
+        val shown = dev.splitbox.core.MessageEnvelope.resolve(error.message.orEmpty()) { key, args ->
+            when (key) {
+                "pm_protocol_package_manager_command_failed_code" -> "Package Manager failed (${args[0]}): ${args.getOrNull(1) ?: ""}"
+                "pm_protocol_no_response" -> "NO RESPONSE TRANSLATED"
+                else -> null
+            }
+        }
+        assertTrue(shown, shown.endsWith(native))
+        assertFalse(shown.contains("NO RESPONSE TRANSLATED"))
+        assertFalse(PmResult(1, native).success)
+        assertEquals("pm install-commit 42", PmProtocol.commit(42))
+    }
 }

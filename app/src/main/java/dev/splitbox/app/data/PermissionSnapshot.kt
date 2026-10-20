@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package dev.splitbox.app.data
 
+import dev.splitbox.core.message
+import dev.splitbox.core.nestedMessage
+
 import dev.splitbox.core.PermissionDeclaration
 import org.json.JSONArray
 import org.json.JSONObject
@@ -22,7 +25,7 @@ internal object PermissionSnapshot {
         check(array.length() <= 65536)
         (0 until array.length()).map { index ->
             val entry = array.getJSONObject(index)
-            val name = entry.get("name") as? String ?: error("Имя разрешения не является строкой")
+            val name = entry.get("name") as? String ?: error(message("permission_snapshot_the_permission_name_is_not_a_string", "Имя разрешения не является строкой"))
             check(name.isNotBlank())
             val minSdk = exactInt(entry.get("minSdk"))
             val maxSdk = if (entry.isNull("maxSdk")) null else exactInt(entry.get("maxSdk"))

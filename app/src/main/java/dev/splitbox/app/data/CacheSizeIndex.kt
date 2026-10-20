@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package dev.splitbox.app.data
 
+import dev.splitbox.core.message
+import dev.splitbox.core.nestedMessage
+
 import java.io.File
 import java.io.IOException
 import java.nio.file.Files
@@ -31,7 +34,7 @@ internal class CacheSizeIndex(private val root: File,
     fun delete(directory: File) = synchronized(ioLock) {
         checkDirectory(directory)
         try {
-            if (!directory.deleteRecursively() && directory.exists()) throw IOException("Не удалось очистить рабочий каталог")
+            if (!directory.deleteRecursively() && directory.exists()) throw IOException(message("cache_size_index_could_not_clear_the_working_directory", "Не удалось очистить рабочий каталог"))
         } finally {
             // При частичном удалении индекс отражает оставшиеся файлы.
             refreshLocked(directory)
@@ -40,7 +43,7 @@ internal class CacheSizeIndex(private val root: File,
 
     private fun checkDirectory(directory: File) {
         check(directory.canonicalFile.parentFile == root.canonicalFile && !Files.isSymbolicLink(directory.toPath())) {
-            "Нельзя изменить каталог вне кэша"
+            message("cache_size_index_cannot_modify_a_directory_outside_the_cache", "Нельзя изменить каталог вне кэша")
         }
     }
 
@@ -54,7 +57,7 @@ internal class CacheSizeIndex(private val root: File,
 }
 
 private fun cacheChildren(directory: File): Array<File> = directory.listFiles()
-    ?: if (!directory.exists()) emptyArray() else throw IOException("Не удалось прочитать каталог кэша")
+    ?: if (!directory.exists()) emptyArray() else throw IOException(message("cache_size_index_could_not_read_the_cache_directory", "Не удалось прочитать каталог кэша"))
 
 private fun measureCacheEntry(entry: File): Long {
     if (Files.isSymbolicLink(entry.toPath())) return 0L

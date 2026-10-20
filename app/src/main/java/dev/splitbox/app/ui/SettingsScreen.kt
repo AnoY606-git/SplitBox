@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package dev.splitbox.app.ui
 
+import dev.splitbox.core.message
+import dev.splitbox.core.nestedMessage
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -29,19 +32,18 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
+import dev.splitbox.app.ui.LocalizedIcon as Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
-import androidx.compose.material3.Text
+import dev.splitbox.app.ui.LocalizedText as Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.selected
@@ -50,6 +52,9 @@ import dev.splitbox.app.model.AccessState
 import dev.splitbox.app.model.AppSettings
 import dev.splitbox.app.model.BackendMode
 import dev.splitbox.app.model.ThemeMode
+import dev.splitbox.app.model.AppLanguage
+import dev.splitbox.app.R
+import androidx.compose.ui.res.stringResource
 import dev.splitbox.app.ui.components.Eyebrow
 import dev.splitbox.app.ui.components.Panel
 import dev.splitbox.app.ui.components.SectionHeading
@@ -62,51 +67,59 @@ fun SettingsScreen(
     cacheBytes: Long,
     busy: Boolean,
     onUpdate: (AppSettings) -> Unit,
+    onLanguageChange: (AppLanguage) -> Unit,
     onRootAccess: () -> Unit,
     onShizukuAccess: () -> Unit,
+    onOpenShizuku: () -> Unit,
+    onShizukuWebsite: () -> Unit,
     onRefreshAccess: () -> Unit,
     onClearCache: () -> Unit,
     onLicense: () -> Unit,
     onNotices: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val uriHandler = LocalUriHandler.current
+
     val editable = !busy
     LazyColumn(modifier, contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
         item("heading") {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Eyebrow("ВАШ ВЫБОР, ВАШ КОНТРОЛЬ")
-                Text("Настроено\nпод вас", style = MaterialTheme.typography.headlineLarge)
-                Text("Способ установки, внешний вид и поведение — в одном месте.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Eyebrow(stringResource(R.string.settings_screen_your_choice_your_control))
+                Text(stringResource(R.string.settings_screen_made_for_you), style = MaterialTheme.typography.headlineLarge)
+                Text(stringResource(R.string.settings_screen_installation_method_appearance_and_behavior_in_one), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         if (busy) item("busy") {
             Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.tertiaryContainer) {
-                Text("Пока идёт операция, параметры установки защищены от изменений.", Modifier.padding(16.dp), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onTertiaryContainer)
+                Text(stringResource(R.string.settings_screen_installation_settings_are_protected_from_changes_while), Modifier.padding(16.dp), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onTertiaryContainer)
             }
         }
         item("backend") {
             Panel(Modifier.fillMaxWidth()) {
-                SectionHeading("Способ установки", "Выбор всегда явный. Приложение не переключается на повышенные права автоматически.")
-                BackendChoice("Системный", "Стандартный диалог Android. Root не требуется.", Icons.Rounded.Shield, settings.backend == BackendMode.SYSTEM, editable) { onUpdate(settings.copy(backend = BackendMode.SYSTEM)) }
-                BackendChoice("Root", "Установка через su и менеджер Root-доступа.", Icons.Rounded.Terminal, settings.backend == BackendMode.ROOT, editable) { onUpdate(settings.copy(backend = BackendMode.ROOT)) }
-                BackendChoice("Shizuku", "Установка через отдельно запущенный сервис Shizuku.", Icons.Rounded.SettingsSuggest, settings.backend == BackendMode.SHIZUKU, editable) { onUpdate(settings.copy(backend = BackendMode.SHIZUKU)) }
+                SectionHeading(stringResource(R.string.history_screen_installation_method), stringResource(R.string.settings_screen_the_choice_is_always_explicit_the_app))
+                BackendChoice(stringResource(R.string.history_presentation_system), stringResource(R.string.settings_screen_standard_android_dialog_no_root_required), Icons.Rounded.Shield, settings.backend == BackendMode.SYSTEM, editable) { onUpdate(settings.copy(backend = BackendMode.SYSTEM)) }
+                BackendChoice("Root", stringResource(R.string.settings_screen_install_using_su_and_a_root_access), Icons.Rounded.Terminal, settings.backend == BackendMode.ROOT, editable) { onUpdate(settings.copy(backend = BackendMode.ROOT)) }
+                BackendChoice("Shizuku", stringResource(R.string.settings_screen_install_using_a_separately_started_shizuku_service), Icons.Rounded.SettingsSuggest, settings.backend == BackendMode.SHIZUKU, editable) { onUpdate(settings.copy(backend = BackendMode.SHIZUKU)) }
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 when (settings.backend) {
                     BackendMode.SYSTEM -> {
-                        Text("Android запросит разрешение устанавливать неизвестные приложения, если оно ещё не выдано. Каждая установка подтверждается системным диалогом.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(stringResource(R.string.settings_screen_android_will_request_permission_to_install_unknown), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     BackendMode.ROOT -> {
-                        AccessExplanation("Root-доступ", access.rootStatus, access.rootGranted)
-                        Text("Нужен заранее настроенный Root. Кнопка ниже запускает su и может вызвать запрос вашего Root-менеджера. Повышенные права используются для установки и отдельно разрешённого переноса OBB.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Button(onClick = onRootAccess, enabled = editable, modifier = Modifier.fillMaxWidth()) { Text(if (access.rootGranted) "Проверить Root повторно" else "Запросить Root-доступ") }
+                        AccessExplanation(stringResource(R.string.settings_screen_root_access), access.rootStatus, access.rootGranted)
+                        Text(stringResource(R.string.settings_screen_root_must_already_be_configured_the_button), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Button(onClick = onRootAccess, enabled = editable, modifier = Modifier.fillMaxWidth()) { Text(if (access.rootGranted) stringResource(R.string.settings_screen_check_root_again) else stringResource(R.string.settings_screen_request_root_access)) }
                     }
                     BackendMode.SHIZUKU -> {
-                        AccessExplanation("Сервис Shizuku", access.shizukuStatus, access.shizukuRunning && access.shizukuGranted)
-                        Text("Установите и запустите Shizuku отдельно, например через беспроводную отладку, затем предоставьте SplitBox доступ. После перезагрузки устройства сервис может потребовать повторного запуска.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Button(onClick = onShizukuAccess, enabled = editable, modifier = Modifier.fillMaxWidth()) { Text(if (access.shizukuGranted) "Проверить доступ Shizuku" else "Запросить доступ Shizuku") }
-                        TextButton(onClick = { uriHandler.openUri("https://shizuku.rikka.app/download/") }, modifier = Modifier.fillMaxWidth()) {
-                            Text("Официальный сайт Shizuku")
+                        AccessExplanation(stringResource(R.string.settings_screen_shizuku_service), access.shizukuStatus, access.shizukuRunning && access.shizukuGranted)
+                        Text(stringResource(R.string.settings_screen_install_and_start_shizuku_separately_for_example), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Button(onClick = onShizukuAccess, enabled = editable, modifier = Modifier.fillMaxWidth()) { Text(if (access.shizukuGranted) stringResource(R.string.settings_screen_check_shizuku_access) else stringResource(R.string.settings_screen_request_shizuku_access)) }
+                        if (!access.shizukuGranted) {
+                            OutlinedButton(onClick = onOpenShizuku, modifier = Modifier.fillMaxWidth()) {
+                                Text(stringResource(R.string.settings_open_shizuku))
+                            }
+                        }
+                        TextButton(onClick = onShizukuWebsite, modifier = Modifier.fillMaxWidth()) {
+                            Text(stringResource(R.string.settings_screen_official_shizuku_website))
                             Spacer(Modifier.width(8.dp))
                             Icon(Icons.AutoMirrored.Rounded.OpenInNew, null, Modifier.size(16.dp))
                         }
@@ -115,14 +128,33 @@ fun SettingsScreen(
                 TextButton(onClick = onRefreshAccess, enabled = editable, modifier = Modifier.fillMaxWidth()) {
                     Icon(Icons.Rounded.Refresh, null, Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("Обновить статус доступа")
+                    Text(stringResource(R.string.settings_screen_refresh_access_status))
                 }
-                Text("Root и Shizuku зависят от Android и прошивки. Проверки Package Manager и ограничения производителя продолжают действовать.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.settings_screen_root_and_shizuku_depend_on_android_and), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        item("language") {
+            Panel(Modifier.fillMaxWidth()) {
+                SectionHeading(stringResource(R.string.settings_language), stringResource(R.string.settings_language_description))
+                AppLanguage.entries.forEach { language ->
+                    val label = stringResource(when (language) {
+                        AppLanguage.SYSTEM -> R.string.settings_language_system
+                        AppLanguage.RUSSIAN -> R.string.settings_language_russian
+                        AppLanguage.ENGLISH -> R.string.settings_language_english
+                    })
+                    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                        .selectable(settings.language == language, role = Role.RadioButton,
+                            onClick = { onLanguageChange(language) }),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        RadioButton(settings.language == language, onClick = null)
+                        Text(label, Modifier.padding(start = 8.dp))
+                    }
+                }
             }
         }
         item("theme") {
             Panel(Modifier.fillMaxWidth()) {
-                SectionHeading("Внешний вид")
+                SectionHeading(stringResource(R.string.settings_screen_appearance))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     ThemeMode.entries.forEach { theme ->
                         val selected = settings.theme == theme
@@ -131,23 +163,23 @@ fun SettingsScreen(
                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 14.dp),
                             colors = if (selected) ButtonDefaults.outlinedButtonColors(containerColor = MaterialTheme.colorScheme.primaryContainer, contentColor = MaterialTheme.colorScheme.onPrimaryContainer) else ButtonDefaults.outlinedButtonColors(),
                         ) {
-                            Text(when (theme) { ThemeMode.SYSTEM -> "Система"; ThemeMode.DARK -> "Тёмная"; ThemeMode.LIGHT -> "Светлая" }, style = MaterialTheme.typography.labelMedium)
+                            Text(when (theme) { ThemeMode.SYSTEM -> stringResource(R.string.settings_screen_system); ThemeMode.DARK -> stringResource(R.string.settings_screen_dark); ThemeMode.LIGHT -> stringResource(R.string.settings_screen_light) }, style = MaterialTheme.typography.labelMedium)
                         }
                     }
                 }
-                SettingToggle("Системные цвета", "Использовать палитру обоев Android вместо фирменной мятной темы.", settings.dynamicColors) { onUpdate(settings.copy(dynamicColors = it)) }
-                SettingToggle("Тактильный отклик", "Лёгкая вибрация при основных действиях и смене раздела.", settings.haptics) { onUpdate(settings.copy(haptics = it)) }
-                SettingToggle("Не гасить экран", "Поддерживать экран включённым во время активной операции, пока SplitBox открыт.", settings.keepScreenOn) { onUpdate(settings.copy(keepScreenOn = it)) }
+                SettingToggle(stringResource(R.string.settings_screen_system_colors), stringResource(R.string.settings_screen_use_the_android_wallpaper_palette_instead_of), settings.dynamicColors) { onUpdate(settings.copy(dynamicColors = it)) }
+                SettingToggle(stringResource(R.string.settings_screen_haptic_feedback), stringResource(R.string.settings_screen_a_light_vibration_for_primary_actions_and), settings.haptics) { onUpdate(settings.copy(haptics = it)) }
+                SettingToggle(stringResource(R.string.settings_screen_keep_screen_on), stringResource(R.string.settings_screen_keep_the_screen_on_during_an_active), settings.keepScreenOn) { onUpdate(settings.copy(keepScreenOn = it)) }
             }
         }
         item("validation") {
             Panel(Modifier.fillMaxWidth()) {
-                SectionHeading("Подготовка и проверка")
-                SettingToggle("Подбирать части автоматически", "Выбирать части под процессор, экран и языки устройства. При отключении выбираются все совместимые необязательные части.", settings.autoSelectSplits, editable) { onUpdate(settings.copy(autoSelectSplits = it)) }
-                SettingToggle("Проверять подписи APK", "Дополнительная криптографическая проверка до установки. Системная проверка Android действует всегда.", settings.verifySignatures, editable) { onUpdate(settings.copy(verifySignatures = it)) }
-                SettingToggle("Вычислять SHA-256", "Показать контрольную сумму исходного файла после подготовки.", settings.computeSha256, editable) { onUpdate(settings.copy(computeSha256 = it)) }
+                SectionHeading(stringResource(R.string.settings_screen_preparation_and_verification))
+                SettingToggle(stringResource(R.string.settings_screen_select_splits_automatically), stringResource(R.string.settings_screen_select_splits_for_your_device_cpu_screen), settings.autoSelectSplits, editable) { onUpdate(settings.copy(autoSelectSplits = it)) }
+                SettingToggle(stringResource(R.string.settings_screen_verify_apk_signatures), stringResource(R.string.settings_screen_additional_cryptographic_verification_before_installation_and), settings.verifySignatures, editable) { onUpdate(settings.copy(verifySignatures = it)) }
+                SettingToggle(stringResource(R.string.settings_screen_calculate_sha_256), stringResource(R.string.settings_screen_show_the_source_file_checksum_after_preparation), settings.computeSha256, editable) { onUpdate(settings.copy(computeSha256 = it)) }
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                SectionHeading("Размер пакета и свободное место", "Авто ограничивает копирование и распаковку свободным местом на диске, оставляя резерв 64 МиБ. Для архива нужны место под исходник, распакованные данные и дополнительную копию APK в сессии Android. Ручной лимит ограничивает исходник и распакованные данные по отдельности. Android и файловая система могут устанавливать свои ограничения.")
+                SectionHeading(stringResource(R.string.settings_screen_package_size_and_free_space), stringResource(R.string.settings_screen_auto_limits_copying_and_extraction_to_the))
                 dev.splitbox.app.data.PackageSizePolicy.choicesGiB.chunked(4).forEach { limits ->
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         limits.forEach { gib ->
@@ -155,7 +187,7 @@ fun SettingsScreen(
                                 onClick = { onUpdate(settings.copy(maxExpandedGiB = gib)) }, modifier = Modifier.weight(1f).semantics { selected = settings.maxExpandedGiB == gib }, enabled = editable,
                                 contentPadding = PaddingValues(horizontal = 6.dp, vertical = 8.dp),
                                 colors = if (settings.maxExpandedGiB == gib) ButtonDefaults.outlinedButtonColors(containerColor = MaterialTheme.colorScheme.primaryContainer, contentColor = MaterialTheme.colorScheme.onPrimaryContainer) else ButtonDefaults.outlinedButtonColors(),
-                            ) { Text(if (gib == 0) "Авто" else "$gib ГиБ", maxLines = 1) }
+                            ) { Text(if (gib == 0) stringResource(R.string.settings_screen_auto) else message("settings_screen_1_gib", "%1\$s ГиБ", gib), maxLines = 1) }
                         }
                     }
                 }
@@ -163,37 +195,37 @@ fun SettingsScreen(
         }
         item("installation") {
             Panel(Modifier.fillMaxWidth()) {
-                SectionHeading("Параметры установки")
-                SettingToggle("Переносить OBB", "Только Root или Shizuku: переносить данные в Android/obb установленного приложения. При системном способе доступен экспорт ZIP.", settings.installObb, editable && settings.backend != BackendMode.SYSTEM) { onUpdate(settings.copy(installObb = it)) }
-                SettingToggle("Разрешить понижение версии", "Только Root или Shizuku. Android может отклонить downgrade даже при включённой опции.", settings.allowDowngrade, editable && settings.backend != BackendMode.SYSTEM) { onUpdate(settings.copy(allowDowngrade = it)) }
+                SectionHeading(stringResource(R.string.settings_screen_installation_options))
+                SettingToggle(stringResource(R.string.settings_screen_copy_obb_files), stringResource(R.string.settings_screen_root_or_shizuku_only_copy_data_to), settings.installObb, editable && settings.backend != BackendMode.SYSTEM) { onUpdate(settings.copy(installObb = it)) }
+                SettingToggle(stringResource(R.string.settings_screen_allow_downgrade), stringResource(R.string.settings_screen_root_or_shizuku_only_android_may_reject), settings.allowDowngrade, editable && settings.backend != BackendMode.SYSTEM) { onUpdate(settings.copy(allowDowngrade = it)) }
             }
         }
         item("storage") {
             Panel(Modifier.fillMaxWidth()) {
-                SectionHeading("Данные на устройстве")
-                SettingToggle("Очищать после установки", "Удалять временные данные после завершения операции. Исходные пользовательские файлы сохраняются.", settings.cleanAfterInstall, editable) { onUpdate(settings.copy(cleanAfterInstall = it)) }
-                SettingToggle("Сохранять историю", "До 100 последних результатов на этом устройстве. Отключение не удаляет уже сохранённые записи.", settings.saveHistory, editable) { onUpdate(settings.copy(saveHistory = it)) }
+                SectionHeading(stringResource(R.string.settings_screen_data_on_this_device))
+                SettingToggle(stringResource(R.string.settings_screen_clean_up_after_installation), stringResource(R.string.settings_screen_delete_temporary_data_after_the_operation_finishes), settings.cleanAfterInstall, editable) { onUpdate(settings.copy(cleanAfterInstall = it)) }
+                SettingToggle(stringResource(R.string.settings_screen_save_history), stringResource(R.string.settings_screen_up_to_100_recent_results_on_this), settings.saveHistory, editable) { onUpdate(settings.copy(saveHistory = it)) }
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Rounded.CleaningServices, null, tint = MaterialTheme.colorScheme.primary)
                     Column(Modifier.weight(1f)) {
-                        Text("Временные файлы", style = MaterialTheme.typography.titleMedium)
+                        Text(stringResource(R.string.settings_screen_temporary_files), style = MaterialTheme.typography.titleMedium)
                         Text(formatBytes(cacheBytes), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
-                FilledTonalButton(onClick = onClearCache, enabled = editable && cacheBytes > 0, modifier = Modifier.fillMaxWidth()) { Text("Очистить временные файлы") }
-                Text("Очистка удаляет только рабочие копии SplitBox. Во время операции она недоступна.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                FilledTonalButton(onClick = onClearCache, enabled = editable && cacheBytes > 0, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.settings_screen_clear_temporary_files)) }
+                Text(stringResource(R.string.settings_screen_cleanup_removes_only_splitbox_working_copies_it), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         item("opensource") {
             Panel(Modifier.fillMaxWidth()) {
                 Icon(Icons.Rounded.Code, null, Modifier.size(28.dp), tint = MaterialTheme.colorScheme.primary)
-                SectionHeading("Открыто по замыслу", "SplitBox · Android 14+")
-                Text("Без рекламы, аналитики и аккаунтов. Ваши APK обрабатываются локально; сетевое разрешение не используется.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                SectionHeading(stringResource(R.string.settings_screen_open_by_design), "SplitBox · Android 14+")
+                Text(stringResource(R.string.settings_screen_no_ads_analytics_or_accounts_your_apks), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text("GNU GPL v3 · GPL-3.0-only", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-                Text("Исходный код, инструкции сборки и лицензии зависимостей входят в комплект проекта. Распространение модифицированных версий регулируется GPL v3.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                TextButton(onClick = onLicense, modifier = Modifier.fillMaxWidth()) { Text("Читать GPL v3") }
-                TextButton(onClick = onNotices, modifier = Modifier.fillMaxWidth()) { Text("Лицензии компонентов") }
+                Text(stringResource(R.string.settings_screen_source_code_build_instructions_and_dependency_licenses), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                TextButton(onClick = onLicense, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.settings_screen_read_gpl_v3)) }
+                TextButton(onClick = onNotices, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.legal_dialog_component_licenses)) }
             }
         }
     }

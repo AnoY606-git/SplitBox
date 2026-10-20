@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package dev.splitbox.app.installer
 
+import dev.splitbox.core.message
+import dev.splitbox.core.nestedMessage
+
 import java.io.IOException
 
 /** Commit мог завершиться, но подтверждение Package Manager не получено. */
@@ -23,5 +26,5 @@ internal fun PmResult.requireCommitSuccess(packageName: String): PmResult {
     if (success) return this
     if (provenCommitFailure) return requireSuccess()
     throw UncertainInstallException(packageName,
-        "Package Manager не подтвердил результат установки. Результат неизвестен; проверьте приложение.")
+        message("uncertain_install_exception_package_manager_did_not_confirm_the_installation", "Package Manager не подтвердил результат установки. Результат неизвестен; проверьте приложение."))
 }

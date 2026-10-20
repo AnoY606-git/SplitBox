@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package dev.splitbox.app.installer
 
+import dev.splitbox.core.message
+import dev.splitbox.core.nestedMessage
+
 import dev.splitbox.app.model.OperationResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
@@ -22,7 +25,7 @@ class RootInstallBackend(private val runner: CommandRunner = ProcessRunner()) : 
         var commitResolved = false
         try {
             val size = request.apks.fold(0L) { sum, apk -> Math.addExact(sum, apk.file.length()) }
-            progress("Root: создание сессии", null)
+            progress(message("root_install_backend_root_creating_session", "Root: создание сессии"), null)
             val id = runInterruptible(Dispatchers.IO) {
                 PmProtocol.sessionId(runner.run(listOf("su", "-c", PmProtocol.create(request.userId, size, request.settings.allowDowngrade)))).also {
                     // ID принадлежит нам ещё до отменяемого возврата из IO.
@@ -31,10 +34,10 @@ class RootInstallBackend(private val runner: CommandRunner = ProcessRunner()) : 
                 }
             }
             var written = 0L
-            val reporting = TransferProgress(size) { bytes, fraction -> progress("Root: запись APK · ${bytes / 1048576} МиБ", fraction) }
+            val reporting = TransferProgress(size) { bytes, fraction -> progress(message("root_install_backend_root_writing_apk_mib", "Root: запись APK · %1\$s МиБ", bytes / 1048576), fraction) }
             request.apks.forEachIndexed { index, apk ->
                 currentCoroutineContext().ensureActive()
-                progress("Root: запись APK ${index + 1} из ${request.apks.size}", (written.toDouble() / size).toFloat())
+                progress(message("root_install_backend_root_writing_apk_of", "Root: запись APK %1\$s из %2\$s", index + 1, request.apks.size), (written.toDouble() / size).toFloat())
                 runInterruptible(Dispatchers.IO) {
                     apk.file.inputStream().use { input ->
                         runner.run(listOf("su", "-c", PmProtocol.write(id, index, apk.file.length())),
@@ -46,7 +49,7 @@ class RootInstallBackend(private val runner: CommandRunner = ProcessRunner()) : 
                 reporting.report(written)
             }
             currentCoroutineContext().ensureActive()
-            progress("Root: установка", null)
+            progress(message("root_install_backend_root_installing", "Root: установка"), null)
             withContext(Dispatchers.IO) {
                 currentCoroutineContext().ensureActive()
                 request.onCommitStarted()
@@ -60,11 +63,11 @@ class RootInstallBackend(private val runner: CommandRunner = ProcessRunner()) : 
                 }
             }
             val warning = copyObb(request, progress)
-            return BackendOutcome.Finished(OperationResult(true, "Приложение установлено через Root", request.prepared.metadata.packageName, warning))
+            return BackendOutcome.Finished(OperationResult(true, message("root_install_backend_app_installed_via_root", "Приложение установлено через Root"), request.prepared.metadata.packageName, warning))
         } catch (e: Exception) {
             if (commitMayHaveRun && !commitResolved && e !is UncertainInstallException) {
                 throw UncertainInstallException(request.prepared.metadata.packageName,
-                    "Ответ Package Manager после начала установки не получен. Результат неизвестен; проверьте приложение.").apply { initCause(e) }
+                    message("root_install_backend_no_response_from_package_manager_was_received", "Ответ Package Manager после начала установки не получен. Результат неизвестен; проверьте приложение.")).apply { initCause(e) }
             }
             throw e
         } finally {
@@ -76,16 +79,16 @@ class RootInstallBackend(private val runner: CommandRunner = ProcessRunner()) : 
     }
     private suspend fun copyObb(request: InstallRequest, progress: (String, Float?) -> Unit): String? {
         if (request.prepared.obbFiles.isEmpty()) return null
-        if (!request.settings.installObb) return "OBB не перенесены: включите перенос OBB или экспортируйте ZIP."
+        if (!request.settings.installObb) return message("root_install_backend_obb_files_were_not_transferred_enable_obb", "OBB не перенесены: включите перенос OBB или экспортируйте ZIP.")
         // Установка APK уже завершена; отмена дополнительного переноса OBB не отменяет этот успех.
         return try {
             request.onObbCopyStarted()
             request.prepared.obbFiles.forEachIndexed { index, obb ->
                 currentCoroutineContext().ensureActive()
-                progress("Root: OBB ${index + 1} из ${request.prepared.obbFiles.size}", null)
+                progress(message("root_install_backend_root_obb_of", "Root: OBB %1\$s из %2\$s", index + 1, request.prepared.obbFiles.size), null)
                 val plan = ObbPolicy.copyPlan(request.userId, request.prepared.metadata.packageName,
                     request.prepared.metadata.versionCode, obb.archivePath.substringAfterLast('/'), obb.size)
-                val reporting = TransferProgress(obb.size) { bytes, fraction -> progress("Root: OBB ${index + 1} · ${bytes / 1048576} МиБ", fraction) }
+                val reporting = TransferProgress(obb.size) { bytes, fraction -> progress(message("root_install_backend_root_obb_mib", "Root: OBB %1\$s · %2\$s МиБ", index + 1, bytes / 1048576), fraction) }
                 try {
                     runInterruptible(Dispatchers.IO) {
                         obb.file.inputStream().use { input -> runner.run(listOf("su", "-c", plan.command),
@@ -95,7 +98,7 @@ class RootInstallBackend(private val runner: CommandRunner = ProcessRunner()) : 
                     // runInterruptible уже завершил дочерний процесс и снял interrupt с IO-потока.
                     withContext(NonCancellable) { withContext(Dispatchers.IO) {
                         try { runner.run(listOf("su", "-c", plan.cleanupCommand), timeoutSeconds = 15).requireSuccess() }
-                        catch (e: Exception) { throw IllegalStateException("Не удалось удалить временный OBB ${plan.temporaryPath}: ${e.message}", e) }
+                        catch (e: Exception) { throw IllegalStateException(message("root_install_backend_could_not_delete_the_temporary_obb_file", "Не удалось удалить временный OBB %1\$s: %2\$s", plan.temporaryPath, nestedMessage(e.message)), e) }
                     } }
                 }
             }
